@@ -7,12 +7,30 @@ from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QLineEdit, QTabWidget,
                              QRadioButton, QButtonGroup, QGroupBox, QTextEdit,
-                             QMessageBox, QFileDialog, QSizePolicy, QStackedWidget)
+                             QMessageBox, QFileDialog, QSizePolicy, QStackedWidget, QComboBox)
 from PyQt6.QtGui import QIcon, QFontDatabase, QDoubleValidator, QIntValidator
 
 from main_functions import *
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
+
+class ExpHelpWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Exponential window")
+        self.setGeometry(800, 200, 700, 700)  # Position to right of main window
+        main_layout = QVBoxLayout()
+        plot_layout = QHBoxLayout()
+
+        self.exp_porb_widget = pg.PlotWidget()
+        self.exp_porb_widget.setLabel('bottom', 'Values')
+        self.exp_porb_widget.showGrid(x=True, y=True, alpha=0.3)
+
+        plot_layout.addWidget(self.exp_porb_widget)
+        main_layout.addLayout(plot_layout)
+
+        self.setLayout(main_layout)
+
 
 class StatisticalApplication(QMainWindow):
     def __init__(self):
@@ -27,6 +45,7 @@ class StatisticalApplication(QMainWindow):
         self._initialize_ui()
         self._connect_signals()
         self._update_ui_state()
+        self.ExpHelpWindow = None
 
         
     def _initialize_ui(self):
@@ -111,9 +130,14 @@ class StatisticalApplication(QMainWindow):
         self.rd_del_anomalies_kurtosis.setAutoExclusive(False)
         anomaly_kurtosis_layout.addWidget(self.rd_del_anomalies_kurtosis)
 
+        prob_paper_layout = QHBoxLayout()
+        self.prob_paper_button = QPushButton("Show exp. prob. paper")
+        prob_paper_layout.addWidget(self.prob_paper_button)
+
         outliers_anomalies_layout.addLayout(trim_layout)
         outliers_anomalies_layout.addLayout(anomaly_layout)
         outliers_anomalies_layout.addLayout(anomaly_kurtosis_layout)
+        outliers_anomalies_layout.addLayout(prob_paper_layout)
 
         controls_layout1.addWidget(outliers_anomalies_group_box)
         controls_layout1.addStretch()
@@ -122,6 +146,7 @@ class StatisticalApplication(QMainWindow):
         main_layout.addLayout(controls_layout)
 
         plot_layout = QHBoxLayout()
+
 
         #Histogramm
         self.histogram_widget = pg.PlotWidget()
@@ -140,6 +165,7 @@ class StatisticalApplication(QMainWindow):
 
         #Mode selection buttons
         mode_buttons_layout = QHBoxLayout()
+
         self.analysis_button = QPushButton("📊 Analysis View")
         self.analysis_button.setCheckable(True)
         self.analysis_button.setChecked(True)
@@ -147,23 +173,30 @@ class StatisticalApplication(QMainWindow):
         self.transform_button = QPushButton("🔄 Transform View")
         self.transform_button.setCheckable(True)
 
+        self.generate_dist_button = QPushButton("🎲 Generate a distribution")
+        self.generate_dist_button.setCheckable(True)
+
         # Create button group for exclusive selection
         self.view_button_group = QButtonGroup()
         self.view_button_group.addButton(self.analysis_button, 1)
         self.view_button_group.addButton(self.transform_button, 2) 
+        self.view_button_group.addButton(self.generate_dist_button, 3)
 
         mode_buttons_layout.addWidget(self.analysis_button) 
         mode_buttons_layout.addWidget(self.transform_button)     
+        mode_buttons_layout.addWidget(self.generate_dist_button)
+
         mode_buttons_layout.addStretch()
         main_layout.addLayout(mode_buttons_layout)
         
-        # Create stacked widget to switch between analysis and transformation
+        #stacked widget to switch between analysis transformation and generation
         self.stacked_widget = QStackedWidget()
         main_layout.addWidget(self.stacked_widget)
         
         # Create analysis panel (statistics output)
         self.analysis_panel = QWidget()
         analysis_layout = QVBoxLayout(self.analysis_panel)
+
         stats_label = QLabel("Statistics:")
         self.statistics_output = QTextEdit()
         self.statistics_output.setReadOnly(True)
@@ -214,13 +247,31 @@ class StatisticalApplication(QMainWindow):
         
         transform_layout.addStretch()
 
+        #generation panel
+        self.generation_panel = QWidget()
+        generation_layout = QVBoxLayout(self.generation_panel)
+        
+        dist_chooser_layout = QHBoxLayout()
+        self.generate_distribution_push_button = QPushButton("Generate distribution of a choosen type")
+        self.falling_list = QComboBox()
+        self.falling_list.addItems(["Exponential", "Normal", "Weibull", "Uniform"])
+
+        dist_chooser_layout.addWidget(self.generate_distribution_push_button)
+        dist_chooser_layout.addWidget(self.falling_list)
+
+        #Adding widgets
+        generation_layout.addLayout(dist_chooser_layout)
+        generation_layout.addStretch()
+
         # Add both panels to the stacked widget
         self.stacked_widget.addWidget(self.analysis_panel)
         self.stacked_widget.addWidget(self.transform_panel)
+        self.stacked_widget.addWidget(self.generation_panel)
         
         # Connect view switching buttons
         self.analysis_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.transform_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
+        self.generate_dist_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
 
     def _connect_signals(self):
         self.file_button.clicked.connect(self._load_data)
@@ -229,6 +280,9 @@ class StatisticalApplication(QMainWindow):
         self.rd_custom.toggled.connect(self.custom_entry.setEnabled)
         self.rd_del_outliers.toggled.connect(self.quantile_entry.setEnabled)
         self.rd_del_anomalies.toggled.connect(self.z_score_entry.setEnabled)
+
+        #Exp button 
+        self.prob_paper_button.clicked.connect(self.show_prob_paper)
 
         # Connect transformation buttons
         self.apply_shift_button.clicked.connect(self._apply_shift)
@@ -305,6 +359,22 @@ class StatisticalApplication(QMainWindow):
             self.modifications_log = []
             self._clear_plots_and_stats()
             self._update_ui_state()
+    
+    def show_prob_paper(self):
+        if self.ExpHelpWindow is None:
+            self.ExpHelpWindow = ExpHelpWindow()
+        
+        # Get the current data for plotting
+        if self.processed_data is not None:
+            # Calculate ECDF for the current processed data
+            x_axis_ecdf, y_axis_ecdf = ecdf(self.processed_data)
+            
+            # Update the probability paper plot in the secondary window
+            self.plot_qq_exponential(self.processed_data)
+            #self._update_exp_prob_paper(x_axis_ecdf, y_axis_ecdf)
+        
+        self.ExpHelpWindow.show()
+        self.ExpHelpWindow.activateWindow()
 
     def _apply_shift(self):
         if self.processed_data is None:
@@ -379,7 +449,6 @@ class StatisticalApplication(QMainWindow):
 
         current_data = self.processed_data.copy()
         temp_modifications = []
-
         try:
             if self.rd_del_outliers.isChecked():
                 try:
@@ -515,11 +584,9 @@ class StatisticalApplication(QMainWindow):
                 delta_h
             )
 
-            """ self._plot_exponential_probpaper(
-                x_axis=x_axis_ecdf,
-                y_axis=y_axis_ecdf,
-                lambda_param=None  # або вкажіть свою оцінку λ
-            )"""
+            if self.ExpHelpWindow is not None and self.ExpHelpWindow.isVisible():
+                #self._update_exp_prob_paper(x_axis_ecdf, y_axis_ecdf)
+                self.plot_qq_exponential(self.processed_data)
             
             # Use the display_statistics_table method 
             self._display_statistics(
@@ -555,7 +622,16 @@ class StatisticalApplication(QMainWindow):
             pen=pg.mkPen('k', width=0.2)
         )
         self.histogram_widget.addItem(histogram_item)
-        self.histogram_widget.autoRange()
+         #Set y-axis range based on max bin height
+        max_height = max(relative_frequencies_array) if relative_frequencies_array else 1.0
+        self.histogram_widget.setYRange(0, max_height * 1.1)  # Add 10% padding on top
+        
+        # Set x-axis range if needed
+        if intervals_array:
+            min_x = min(intervals_array) - bar_width/2
+            max_x = max(intervals_array) + bar_width/2
+            self.histogram_widget.setXRange(min_x, max_x)
+
 
     def _plot_ecdf(self, x_axis, y_axis):
         self.ecdf_widget.clear()
@@ -606,51 +682,63 @@ class StatisticalApplication(QMainWindow):
             )
             self.ecdf_widget.addItem(seg)
 
-
-    def _plot_exponential_probpaper(
-        self,
-        x_axis,
-        y_axis,
-        lambda_param=None,
-        pen_line=None,
-        scatter_brush=None
-    ):
-        # перевірка даних
-        if x_axis is None or y_axis is None or len(x_axis) == 0 or len(y_axis) == 0:
+    def plot_qq_exponential(self, data):
+        if self.ExpHelpWindow is None or not data:
             return
+        w = self.ExpHelpWindow.exp_porb_widget
+        w.clear()
+        
+        x = sorted([float(item) for item in data])
+        n = len(x)
+        # Емпіричні ймовірності
+        p_emp = []
+        for i in range(1, n + 1):
+            prob = (i - 0.5) / n
+            p_emp.append(min(prob, 0.99))
+        phi = []
+        for p in p_emp:
+            phi.append(math.log(1 / (1 - p)))
+        
+        scatter = pg.ScatterPlotItem(x=x, y=phi, size=5, brush=pg.mkBrush('b'))
+        w.addItem(scatter)
 
-        # перетворюємо у numpy
-        x = np.array(x_axis, dtype=float)
-        F = np.array(y_axis, dtype=float)
-        # оцінка lambda, якщо не задана
-        if lambda_param is None:
-            lambda_param = 1.0 / arithmetic_mean(x)
-
-        # перетворення y
-        y_trans = -np.log(1 - F)
-
-        # точки
-        scatter = pg.ScatterPlotItem(
-            x=x, y=y_trans,
-            size=4,
-            brush=scatter_brush or pg.mkBrush('b')
-        )
-        self.ecdf_widget.addItem(scatter)
-
-        x_line = np.array([x.min(), x.max()])
-        y_line = lambda_param * x_line
-        line = pg.PlotCurveItem(
-            x=x_line, y=y_line,
-            pen=pen_line or pg.mkPen('r', width=2)
-        )
-        self.ecdf_widget.addItem(line)
-
-        # підписи та сітка
-        self.ecdf_widget.showGrid(x=True, y=True)
-        self.ecdf_widget.setLabels(
-            bottom='values'
-        )
-        self.ecdf_widget.autoRange()
+        #ЛІНІЙНА РЕГРЕСІЯ ФОРМУЛИ
+        sum_x = sum(x)
+        sum_y = sum(phi)
+        sum_x_squared = sum(x_val * x_val for x_val in x)
+        sum_xy = sum(x_val * y_val for x_val, y_val in zip(x, phi))
+        # a, b
+        a = (n * sum_xy - sum_x * sum_y) / (n * sum_x_squared - sum_x * sum_x)
+        b = (sum_y - a * sum_x) / n
+        min_x = min(x)
+        max_x = max(x)
+        line_x = []
+        line_y = []
+        step = (max_x - min_x) / 99 
+        for i in range(100):
+            x_val = min_x + step * i
+            line_x.append(x_val)
+            line_y.append(b + a * x_val)
+        line = pg.PlotCurveItem(x=line_x, y=line_y, pen=pg.mkPen('r', width=2))
+        w.addItem(line)
+        
+        # значення p
+        tick_probs = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
+        tick_positions = []
+        for p in tick_probs:
+            if p < 1:
+                tick_positions.append(math.log(1 / (1 - p)))
+        
+        yticks = [(val, f"{p:.2f}") for val, p in zip(tick_positions, tick_probs)]
+        w.getPlotItem().getAxis('left').setTicks([yticks])
+        
+        max_phi = math.log(1 / (1 - 0.99))
+        w.setYRange(0, max_phi)
+        
+        w.setXRange(min(x), max(x))
+        
+        w.setLabels(bottom='x', left='Ймовірність p')
+        w.showGrid(x=True, y=True, alpha=0.3)
 
     def _clear_plots_and_stats(self):
         """Clears all plots and statistics text area."""
@@ -715,7 +803,7 @@ class StatisticalApplication(QMainWindow):
             # Variance
             se_var = intervals_dict["Standard Errors"]["SE Variance"]
             ci_var = intervals_dict["Confidence Intervals"]["CI Variance"]
-            table_lines.append(f"| {'Unbiased Variance':<20} | {se_var:15.6f} | {ci_var[0]:15.6f} | {unbiased_var:12.6f} | {ci_var[1]:15.6f} |")
+            #table_lines.append(f"| {'Unbiased Variance':<20} | {se_var:15.6f} | {ci_var[0]:15.6f} | {unbiased_var:12.6f} | {ci_var[1]:15.6f} |")
             # Standard Deviation
             ci_std = intervals_dict["Confidence Intervals"]["CI Std Dev"]
             table_lines.append(f"| {'Unbiased Std Dev':<20} | {se_var**(1/2):15.6f} | {ci_std[0]:15.6f} | {unbiased_std:12.6f} | {ci_std[1]:15.6f} |")
@@ -852,7 +940,9 @@ def main():
         }
 
     """)
+
     app.setStyle("Fusion")
+    #app.setStyleSheet(styles_main)
     window = StatisticalApplication()
     window.show()
     sys.exit(app.exec())

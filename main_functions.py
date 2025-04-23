@@ -82,7 +82,7 @@ def trimmed_mean(raw_dist_data, a = 0.1): # trim a% from both sides, then find a
     trimmed_sum = 0
     k = int(a*length)
     t = k
-    while t <= length-k:
+    while t < length-k:
         trimmed_sum += sorted_dist_data[t]
         t+=1
     return trimmed_sum/(length - 2*k)

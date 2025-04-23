@@ -264,20 +264,68 @@ class StatisticalApplication(QMainWindow):
         dist_chooser_layout.addWidget(size_label)
         dist_chooser_layout.addWidget(self.size_line)
 
-        #Exp params 
+        #params 
         self.params_layout = QHBoxLayout()
+
+        #Exp
         self.lambda_label = QLabel("Lambda: ")
         self.lambda_line = QLineEdit("0")
         self.params_layout.addWidget(self.lambda_label)
         self.params_layout.addWidget(self.lambda_line)
-
         self.lambda_label.hide()
         self.lambda_line.hide()
 
+        #Uniform
+        self.a_label = QLabel("a: ")
+        self.b_label = QLabel("b: ")
+        self.a_line = QLineEdit("0")
+        self.b_line = QLineEdit("1")
+
+        self.params_layout.addWidget(self.a_label)
+        self.params_layout.addWidget(self.a_line)
+        self.params_layout.addWidget(self.b_label)
+        self.params_layout.addWidget(self.b_line)
+
+        self.a_label.hide()
+        self.a_line.hide()
+        self.b_label.hide()
+        self.b_line.hide()
+
+        #Weibull
+        self.alpha_label = QLabel("alpha: ")
+        self.alpha_line = QLineEdit("1")
+        self.beta_label = QLabel("beta: ")
+        self.beta_line = QLineEdit("1")
+
+        self.params_layout.addWidget(self.alpha_label)
+        self.params_layout.addWidget(self.alpha_line)
+        self.params_layout.addWidget(self.beta_label)
+        self.params_layout.addWidget(self.beta_line)
+
+        self.alpha_label.hide()
+        self.alpha_line.hide()
+        self.beta_label.hide()
+        self.beta_line.hide()
+
+        #Normal Box-Muller
+        self.mean_label = QLabel("mean: ")
+        self.mean_line = QLineEdit("0")
+        self.std_label = QLabel("std: ")
+        self.std_line = QLineEdit("1")
+
+        self.params_layout.addWidget(self.mean_label)
+        self.params_layout.addWidget(self.mean_line)
+        self.params_layout.addWidget(self.std_label)
+        self.params_layout.addWidget(self.std_line)
+
+        self.mean_label.hide()
+        self.mean_line.hide()
+        self.std_label.hide()
+        self.std_line.hide()
 
         #Adding widgets
+        dist_chooser_layout.addLayout(self.params_layout)
         generation_layout.addLayout(dist_chooser_layout)
-        generation_layout.addLayout(self.params_layout)
         generation_layout.addStretch()
 
         # Add both panels to the stacked widget
@@ -348,12 +396,43 @@ class StatisticalApplication(QMainWindow):
         self.apply_standartization_button.setEnabled(data_loaded)
 
         self.current_dist = self.falling_list.currentText()
+        #Hide lambda
         self.lambda_label.hide()
         self.lambda_line.hide()
+        #Hide uniform
+        self.a_label.hide()
+        self.a_line.hide()
+        self.b_label.hide()
+        self.b_line.hide()
+        #Hide Weibull
+        self.alpha_label.hide()
+        self.alpha_line.hide()
+        self.beta_label.hide()
+        self.beta_line.hide()
+        #Hide Normal
+        self.mean_label.hide()
+        self.mean_line.hide()
+        self.std_label.hide()
+        self.std_line.hide()        
 
         if self.current_dist == "Exponential":
             self.lambda_label.show()
             self.lambda_line.show()
+        elif self.current_dist == "Uniform":
+            self.a_label.show()
+            self.a_line.show()
+            self.b_label.show()
+            self.b_line.show()
+        elif self.current_dist == "Weibull":
+            self.alpha_label.show()
+            self.alpha_line.show()
+            self.beta_label.show()
+            self.beta_line.show()
+        elif self.current_dist == "Normal":
+            self.mean_label.show()
+            self.mean_line.show()
+            self.std_label.show()
+            self.std_line.show()
 
     def _load_data(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -479,9 +558,22 @@ class StatisticalApplication(QMainWindow):
                 n = int(n_str)
         except:
             QMessageBox.warning(self, "Invalid Input","Please enter a valid number for dist generation")
+
         if self.current_dist == "Exponential":
             lam = float(self.lambda_line.text().strip())
             dist_array = generate_exp_theoretical_dist(n, lam)
+        elif self.current_dist == "Uniform":
+            a = float(self.a_line.text().strip())
+            b = float(self.b_line.text().strip()) 
+            dist_array = generate_uniform_theoretical_dist(n, a, b)
+        elif self.current_dist == "Weibull":
+            alpha = float(self.alpha_line.text().strip())
+            beta = float(self.beta_line.text().strip())
+            dist_array = generate_weibull_theoretical_dist(n, alpha, beta)
+        elif self.current_dist == "Normal":
+            mean = float(self.mean_line.text().strip())
+            std = float(self.std_line.text().strip())
+            dist_array = generate_normal_box_muller_distribution(n, mean, std)
 
         if dist_array is not None:
             # Open file save dialog
@@ -491,7 +583,6 @@ class StatisticalApplication(QMainWindow):
                 "",  # Default directory
                 "Text Files (*.txt);;All Files (*)"
             )
-            
             if file_path:  # If user didn't cancel the dialog
                 try:
                     with open(file_path, 'w') as file:

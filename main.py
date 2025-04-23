@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtGui import QIcon, QFontDatabase, QDoubleValidator, QIntValidator
 
 from main_functions import *
+from dist_generation import *
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
@@ -255,12 +256,28 @@ class StatisticalApplication(QMainWindow):
         self.generate_distribution_push_button = QPushButton("Generate distribution of a choosen type")
         self.falling_list = QComboBox()
         self.falling_list.addItems(["Exponential", "Normal", "Weibull", "Uniform"])
+        size_label = QLabel("Size n: ")
+        self.size_line = QLineEdit()
 
         dist_chooser_layout.addWidget(self.generate_distribution_push_button)
         dist_chooser_layout.addWidget(self.falling_list)
+        dist_chooser_layout.addWidget(size_label)
+        dist_chooser_layout.addWidget(self.size_line)
+
+        #Exp params 
+        self.params_layout = QHBoxLayout()
+        self.lambda_label = QLabel("Lambda: ")
+        self.lambda_line = QLineEdit("0")
+        self.params_layout.addWidget(self.lambda_label)
+        self.params_layout.addWidget(self.lambda_line)
+
+        self.lambda_label.hide()
+        self.lambda_line.hide()
+
 
         #Adding widgets
         generation_layout.addLayout(dist_chooser_layout)
+        generation_layout.addLayout(self.params_layout)
         generation_layout.addStretch()
 
         # Add both panels to the stacked widget
@@ -272,6 +289,7 @@ class StatisticalApplication(QMainWindow):
         self.analysis_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.transform_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         self.generate_dist_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
+
 
     def _connect_signals(self):
         self.file_button.clicked.connect(self._load_data)
@@ -288,7 +306,10 @@ class StatisticalApplication(QMainWindow):
         self.apply_shift_button.clicked.connect(self._apply_shift)
         self.apply_log_button.clicked.connect(self._apply_logarithm)
         self.apply_standartization_button.clicked.connect(self._standartise_data)
+        self.generate_distribution_push_button.clicked.connect(self._generate_distribution)
         self.reset_data_button.clicked.connect(self._reset_data)
+        self.falling_list.currentTextChanged.connect(self._update_ui_state)
+
 
     def _reset_data(self):
         if self.raw_dist_data is None:
@@ -320,12 +341,19 @@ class StatisticalApplication(QMainWindow):
         self.z_score_entry.setEnabled(data_loaded and self.rd_del_anomalies.isChecked())
         self.rd_del_anomalies_kurtosis.setEnabled(data_loaded)
         self.update_button.setEnabled(data_loaded)
-
         self.shift_input.setEnabled(data_loaded)
         self.apply_shift_button.setEnabled(data_loaded)
         self.apply_log_button.setEnabled(data_loaded)
         self.reset_data_button.setEnabled(data_loaded)
         self.apply_standartization_button.setEnabled(data_loaded)
+
+        self.current_dist = self.falling_list.currentText()
+        self.lambda_label.hide()
+        self.lambda_line.hide()
+
+        if self.current_dist == "Exponential":
+            self.lambda_label.show()
+            self.lambda_line.show()
 
     def _load_data(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -441,7 +469,39 @@ class StatisticalApplication(QMainWindow):
             self._update_analysis()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred while standardizing the data: {e}")
+    
+    def _generate_distribution(self):
+        try:
+            n_str = self.size_line.text().strip()
+            if not n_str or int(n_str) == 0:
+                QMessageBox.warning(self, "Generating Error", "You must enter n")
+            else:
+                n = int(n_str)
+        except:
+            QMessageBox.warning(self, "Invalid Input","Please enter a valid number for dist generation")
+        if self.current_dist == "Exponential":
+            lam = float(self.lambda_line.text().strip())
+            dist_array = generate_exp_theoretical_dist(n, lam)
 
+        if dist_array is not None:
+            # Open file save dialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Distribution Data",
+                "",  # Default directory
+                "Text Files (*.txt);;All Files (*)"
+            )
+            
+            if file_path:  # If user didn't cancel the dialog
+                try:
+                    with open(file_path, 'w') as file:
+                        # Convert all numbers to strings and join with spaces
+                        file.write(' '.join(map(str, dist_array)))
+                    QMessageBox.information(self, "Success", f"Distribution saved to {file_path}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
+        
+    
     def _update_analysis(self):
         if self.processed_data is None:
             self._clear_plots_and_stats()

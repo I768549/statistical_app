@@ -1,1 +1,1 @@
-Hello wfuck you
+Statistical application!

@@ -360,14 +360,14 @@ class StatisticalApplication(QMainWindow):
         #T_test Table
         self.t_test_result_table = QTableWidget()
         self.t_test_result_table.setRowCount(7) 
-        self.t_test_result_table.setColumnCount(5)
+        self.t_test_result_table.setColumnCount(6)
 
         # Set row headers (sample sizes)
         sample_sizes = ["20", "50", "100", "400", "1000", "2000", "5000"]
         self.t_test_result_table.setVerticalHeaderLabels(sample_sizes)
 
         # Set column headers - modify these based on your exact needs
-        column_headers = ["E{λ'}", "σ{λ'}", "E{t-statistics}", "σ{T-statistics}", "T-value(1-a/2)"]  # Example column headers
+        column_headers = ["E{λ'}", "σ{λ'}", "E{t-statistics}", "σ{T-statistics}", "T-value(1-a/2)", "alpha"]  # Example column headers
         self.t_test_result_table.setHorizontalHeaderLabels(column_headers)
 
         # Set reasonable size for the table
@@ -551,12 +551,13 @@ class StatisticalApplication(QMainWindow):
                 QMessageBox.warning(self, "Error","Lambda value must be > 0")
         except ValueError:
             QMessageBox.warning(self, "input error", "Enter a number")
-        alpha = significance_level
-        distribution = self.falling_list_2.currentText()
+        alpha_values = [0.8, 0.25, 0.15, 0.10, 0.05, 0.05, 0.05]
+        #alpha = significance_level
         sample_sizes_str = ["20", "50", "100", "400", "1000", "2000", "5000"]
         sample_sizes_int =[int(element) for element in sample_sizes_str]
         experiment_amount = 450
         for idx, sample_size in enumerate(sample_sizes_int):
+            alpha = alpha_values[idx]
             estimated_lambdas = []
             estimated_t_statistics = []
             for _ in range(experiment_amount):
@@ -567,7 +568,7 @@ class StatisticalApplication(QMainWindow):
                 #estimated lambda
                 estimated_lambda = 1/arithmetic_mean(simulated_exp_distr)
                 estimated_lambdas.append(estimated_lambda)
-                se_estimated_lambda = sample_std/math.sqrt(sample_size)
+                se_estimated_lambda = true_param_value/math.sqrt(sample_size)
                 #t-statistics
                 t_stat = (estimated_lambda-true_param_value)/se_estimated_lambda
                 estimated_t_statistics.append(t_stat)
@@ -585,6 +586,7 @@ class StatisticalApplication(QMainWindow):
             self.t_test_result_table.setItem(idx, 2, QTableWidgetItem(f"{mean_estimated_t_statistics:.4f}"))
             self.t_test_result_table.setItem(idx, 3, QTableWidgetItem(f"{std_estimated_t_statistics:.4f}"))
             self.t_test_result_table.setItem(idx, 4, QTableWidgetItem(f"{t_critical:.4f}"))
+            self.t_test_result_table.setItem(idx, 5, QTableWidgetItem(f"{alpha}"))
         
     def show_prob_paper(self):
         if self.ExpHelpWindow is None:

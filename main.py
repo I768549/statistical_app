@@ -560,11 +560,15 @@ class StatisticalApplication(QMainWindow):
             estimated_lambdas = []
             estimated_t_statistics = []
             for _ in range(experiment_amount):
+                #sample
                 simulated_exp_distr = generate_exp_theoretical_dist(sample_size, true_param_value)
+                sample_mean = arithmetic_mean(simulated_exp_distr)
+                sample_std = math.sqrt(unbiased_sample_variance(simulated_exp_distr, sample_mean))
+                #estimated lambda
                 estimated_lambda = 1/arithmetic_mean(simulated_exp_distr)
                 estimated_lambdas.append(estimated_lambda)
-                sample_std = math.sqrt(unbiased_sample_variance(simulated_exp_distr, arithmetic_mean(simulated_exp_distr)))
                 se_estimated_lambda = sample_std/math.sqrt(sample_size)
+                #t-statistics
                 t_stat = (estimated_lambda-true_param_value)/se_estimated_lambda
                 estimated_t_statistics.append(t_stat)
             #lambdas values
@@ -573,8 +577,8 @@ class StatisticalApplication(QMainWindow):
             #t-statistics values
             mean_estimated_t_statistics = arithmetic_mean(estimated_t_statistics)
             std_estimated_t_statistics = math.sqrt(unbiased_sample_variance(estimated_t_statistics, mean_estimated_t_statistics))
-        
-            t_critical = t.ppf(1-alpha/2, sample_size-1)
+            #TODO: разобраться с этой хуйней
+            t_critical = t.ppf(1-alpha/2, sample_size)
 
             self.t_test_result_table.setItem(idx, 0, QTableWidgetItem(f"{mean_estimated_lambdas:.4f}"))
             self.t_test_result_table.setItem(idx, 1, QTableWidgetItem(f"{std_estimated_lambdas:.4f}"))

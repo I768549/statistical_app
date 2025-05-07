@@ -1,11 +1,11 @@
 import sys
 import numpy as np
-
+from scipy.stats import t
 import math
 import pyqtgraph as pg
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                             QHBoxLayout, QPushButton, QLabel, QLineEdit, QTabWidget,
+                             QHBoxLayout, QPushButton, QLabel, QLineEdit, QTabWidget,QTableWidget, QHeaderView, QTableWidgetItem,
                              QRadioButton, QButtonGroup, QGroupBox, QTextEdit,
                              QMessageBox, QFileDialog, QSizePolicy, QStackedWidget, QComboBox)
 from PyQt6.QtGui import QIcon, QFontDatabase, QDoubleValidator, QIntValidator
@@ -174,7 +174,7 @@ class StatisticalApplication(QMainWindow):
         self.transform_button = QPushButton("🔄 Transform View")
         self.transform_button.setCheckable(True)
 
-        self.generate_dist_button = QPushButton("🎲 Generate a distribution")
+        self.generate_dist_button = QPushButton("🎲Random distributions and hypotheses test")
         self.generate_dist_button.setCheckable(True)
 
         # Create button group for exclusive selection
@@ -251,11 +251,14 @@ class StatisticalApplication(QMainWindow):
         #generation panel
         self.generation_panel = QWidget()
         generation_layout = QVBoxLayout(self.generation_panel)
+        label_arb_gen = QLabel("You can generate distribution of an available type here:")
+        generation_layout.addWidget(label_arb_gen)
+
         
         dist_chooser_layout = QHBoxLayout()
         self.generate_distribution_push_button = QPushButton("Generate distribution of a choosen type")
         self.falling_list = QComboBox()
-        self.falling_list.addItems(["Exponential", "Normal", "Weibull", "Uniform"])
+        self.falling_list.addItems(["Exponential", "Normal", "Weibull", "Uniform", "Laplace"])
         size_label = QLabel("Size n: ")
         self.size_line = QLineEdit()
 
@@ -291,6 +294,23 @@ class StatisticalApplication(QMainWindow):
         self.b_label.hide()
         self.b_line.hide()
 
+        #Laplace
+        self.lam2_label = QLabel("lambda: ")
+        self.mean2_label = QLabel("mean: ")
+        self.lam2_line = QLineEdit("0")
+        self.mean2_line = QLineEdit("1")
+
+        self.params_layout.addWidget(self.lam2_label)
+        self.params_layout.addWidget(self.lam2_line)
+        self.params_layout.addWidget(self.mean2_label)
+        self.params_layout.addWidget(self.mean2_line)
+
+        self.lam2_label.hide()
+        self.lam2_line.hide()
+        self.mean2_label.hide()
+        self.mean2_line.hide()
+
+
         #Weibull
         self.alpha_label = QLabel("alpha: ")
         self.alpha_line = QLineEdit("1")
@@ -322,10 +342,56 @@ class StatisticalApplication(QMainWindow):
         self.mean_line.hide()
         self.std_label.hide()
         self.std_line.hide()
-
-        #Adding widgets
         dist_chooser_layout.addLayout(self.params_layout)
+
+        #t-test layout
+        t_test_layout = QVBoxLayout()
+        t_test_choosing_layout = QHBoxLayout()
+
+        label_t_test = QLabel("Perfome a t-test for a choosen distribution here:")
+        significance_level_label = QLabel("alpha:")
+        self.significance_level_line = QLineEdit("0.05")
+        self.falling_list_2 = QComboBox()
+        self.falling_list_2.addItems(["Exponential"])
+        param_value_label = QLabel("Parameter value:")
+        self.param_value_line = QLineEdit("5")
+        self.perfom_t_test_qpushbut = QPushButton("Perfom a t-test")
+
+        #T_test Table
+        self.t_test_result_table = QTableWidget()
+        self.t_test_result_table.setRowCount(7) 
+        self.t_test_result_table.setColumnCount(5)
+
+        # Set row headers (sample sizes)
+        sample_sizes = ["20", "50", "100", "400", "1000", "2000", "5000"]
+        self.t_test_result_table.setVerticalHeaderLabels(sample_sizes)
+
+        # Set column headers - modify these based on your exact needs
+        column_headers = ["E{λ'}", "σ{λ'}", "E{t-statistics}", "σ{T-statistics}", "T-value(1-a/2)"]  # Example column headers
+        self.t_test_result_table.setHorizontalHeaderLabels(column_headers)
+
+        # Set reasonable size for the table
+        self.t_test_result_table.setMinimumHeight(238)
+        self.t_test_result_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        #t-test_widgets_adding
+        t_test_layout.addWidget(label_t_test)
+        t_test_choosing_layout.addWidget(self.falling_list_2)
+        t_test_choosing_layout.addWidget(param_value_label)
+        t_test_choosing_layout.addWidget(self.param_value_line)
+        t_test_choosing_layout.addWidget(significance_level_label)
+        t_test_choosing_layout.addWidget(self.significance_level_line)
+        t_test_choosing_layout.addWidget(self.perfom_t_test_qpushbut)
+
+
+        t_test_layout.addLayout(t_test_choosing_layout)
+        t_test_layout.addWidget(self.t_test_result_table)
+
+        self.perfom_t_test_qpushbut.clicked.connect(self.handle_t_test)
+
+        #Adding layouts
         generation_layout.addLayout(dist_chooser_layout)
+        generation_layout.addLayout(t_test_layout)
         generation_layout.addStretch()
 
         # Add both panels to the stacked widget
@@ -413,7 +479,12 @@ class StatisticalApplication(QMainWindow):
         self.mean_label.hide()
         self.mean_line.hide()
         self.std_label.hide()
-        self.std_line.hide()        
+        self.std_line.hide()     
+        #Hide Laplace
+        self.lam2_label.hide()
+        self.lam2_line.hide()
+        self.mean2_label.hide()
+        self.mean2_line.hide()   
 
         if self.current_dist == "Exponential":
             self.lambda_label.show()
@@ -433,6 +504,11 @@ class StatisticalApplication(QMainWindow):
             self.mean_line.show()
             self.std_label.show()
             self.std_line.show()
+        elif self.current_dist == "Laplace":
+            self.lam2_label.show()
+            self.lam2_line.show()
+            self.mean2_label.show()
+            self.mean2_line.show()
 
     def _load_data(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -466,7 +542,46 @@ class StatisticalApplication(QMainWindow):
             self.modifications_log = []
             self._clear_plots_and_stats()
             self._update_ui_state()
-    
+
+    def handle_t_test(self):
+        try:
+            true_param_value = float(self.param_value_line.text())
+            significance_level = float(self.significance_level_line.text())
+            if true_param_value <= 0:
+                QMessageBox.warning(self, "Error","Lambda value must be > 0")
+        except ValueError:
+            QMessageBox.warning(self, "input error", "Enter a number")
+        alpha = significance_level
+        distribution = self.falling_list_2.currentText()
+        sample_sizes_str = ["20", "50", "100", "400", "1000", "2000", "5000"]
+        sample_sizes_int =[int(element) for element in sample_sizes_str]
+        experiment_amount = 450
+        for idx, sample_size in enumerate(sample_sizes_int):
+            estimated_lambdas = []
+            estimated_t_statistics = []
+            for _ in range(experiment_amount):
+                simulated_exp_distr = generate_exp_theoretical_dist(sample_size, true_param_value)
+                estimated_lambda = 1/arithmetic_mean(simulated_exp_distr)
+                estimated_lambdas.append(estimated_lambda)
+                sample_std = math.sqrt(unbiased_sample_variance(simulated_exp_distr, arithmetic_mean(simulated_exp_distr)))
+                se_estimated_lambda = sample_std/math.sqrt(sample_size)
+                t_stat = (estimated_lambda-true_param_value)/se_estimated_lambda
+                estimated_t_statistics.append(t_stat)
+            #lambdas values
+            mean_estimated_lambdas = arithmetic_mean(estimated_lambdas)
+            std_estimated_lambdas = math.sqrt(unbiased_sample_variance(estimated_lambdas, mean_estimated_lambdas))
+            #t-statistics values
+            mean_estimated_t_statistics = arithmetic_mean(estimated_t_statistics)
+            std_estimated_t_statistics = math.sqrt(unbiased_sample_variance(estimated_t_statistics, mean_estimated_t_statistics))
+        
+            t_critical = t.ppf(1-alpha/2, sample_size-1)
+
+            self.t_test_result_table.setItem(idx, 0, QTableWidgetItem(f"{mean_estimated_lambdas:.4f}"))
+            self.t_test_result_table.setItem(idx, 1, QTableWidgetItem(f"{std_estimated_lambdas:.4f}"))
+            self.t_test_result_table.setItem(idx, 2, QTableWidgetItem(f"{mean_estimated_t_statistics:.4f}"))
+            self.t_test_result_table.setItem(idx, 3, QTableWidgetItem(f"{std_estimated_t_statistics:.4f}"))
+            self.t_test_result_table.setItem(idx, 4, QTableWidgetItem(f"{t_critical:.4f}"))
+        
     def show_prob_paper(self):
         if self.ExpHelpWindow is None:
             self.ExpHelpWindow = ExpHelpWindow()
@@ -574,6 +689,12 @@ class StatisticalApplication(QMainWindow):
             mean = float(self.mean_line.text().strip())
             std = float(self.std_line.text().strip())
             dist_array = generate_normal_box_muller_distribution(n, mean, std)
+        elif self.current_dist == "Laplace":
+            lam = float(self.lam2_line.text().strip())
+            mean = float(self.mean2_line.text().strip())
+            dist_array = generate_laplace(mu=mean, b=lam, size=n)
+
+            
 
         if dist_array is not None:
             # Open file save dialog

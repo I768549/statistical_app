@@ -350,7 +350,7 @@ class StatisticalApplication(QMainWindow):
 
         label_t_test = QLabel("Perfome a t-test for a choosen distribution here:")
         significance_level_label = QLabel("alpha:")
-        self.significance_level_line = QLineEdit("0.05")
+        self.significance_level_line = QLineEdit("0")
         self.falling_list_2 = QComboBox()
         self.falling_list_2.addItems(["Exponential"])
         param_value_label = QLabel("Parameter value:")
@@ -551,13 +551,16 @@ class StatisticalApplication(QMainWindow):
                 QMessageBox.warning(self, "Error","Lambda value must be > 0")
         except ValueError:
             QMessageBox.warning(self, "input error", "Enter a number")
-        alpha_values = [0.8, 0.25, 0.15, 0.10, 0.05, 0.05, 0.05]
+        alpha_values = [0.80, 0.70, 0.40, 0.20, 0.10, 0.05, 0.05]
         #alpha = significance_level
         sample_sizes_str = ["20", "50", "100", "400", "1000", "2000", "5000"]
         sample_sizes_int =[int(element) for element in sample_sizes_str]
         experiment_amount = 450
         for idx, sample_size in enumerate(sample_sizes_int):
-            alpha = alpha_values[idx]
+            if significance_level <= 0:
+                alpha = alpha_values[idx]
+            else:
+                alpha = significance_level
             estimated_lambdas = []
             estimated_t_statistics = []
             for _ in range(experiment_amount):
@@ -566,11 +569,13 @@ class StatisticalApplication(QMainWindow):
                 sample_mean = arithmetic_mean(simulated_exp_distr)
                 sample_std = math.sqrt(unbiased_sample_variance(simulated_exp_distr, sample_mean))
                 #estimated lambda
-                estimated_lambda = 1/arithmetic_mean(simulated_exp_distr)
+
+                estimated_lambda = 1/sample_mean
                 estimated_lambdas.append(estimated_lambda)
-                se_estimated_lambda = true_param_value/math.sqrt(sample_size)
+                #se_estimated_lambda = estimated_lambda/math.sqrt(sample_size)
+                true_mean = 1/true_param_value
                 #t-statistics
-                t_stat = (estimated_lambda-true_param_value)/se_estimated_lambda
+                t_stat = (sample_mean-true_mean)/(sample_std/math.sqrt(sample_size))
                 estimated_t_statistics.append(t_stat)
             #lambdas values
             mean_estimated_lambdas = arithmetic_mean(estimated_lambdas)
@@ -579,7 +584,7 @@ class StatisticalApplication(QMainWindow):
             mean_estimated_t_statistics = arithmetic_mean(estimated_t_statistics)
             std_estimated_t_statistics = math.sqrt(unbiased_sample_variance(estimated_t_statistics, mean_estimated_t_statistics))
             #TODO: разобраться с этой хуйней
-            t_critical = t.ppf(1-alpha/2, sample_size)
+            t_critical = t.ppf(1-alpha/2, sample_size-1)
 
             self.t_test_result_table.setItem(idx, 0, QTableWidgetItem(f"{mean_estimated_lambdas:.4f}"))
             self.t_test_result_table.setItem(idx, 1, QTableWidgetItem(f"{std_estimated_lambdas:.4f}"))

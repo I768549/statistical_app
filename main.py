@@ -7,7 +7,7 @@ from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QLineEdit, QTabWidget,QTableWidget, QHeaderView, QTableWidgetItem,
                              QRadioButton, QButtonGroup, QGroupBox, QTextEdit,
-                             QMessageBox, QFileDialog, QSizePolicy, QStackedWidget, QComboBox)
+                             QMessageBox, QFileDialog, QSizePolicy, QStackedWidget, QComboBox, QCheckBox)
 from PyQt6.QtGui import QIcon, QFontDatabase, QDoubleValidator, QIntValidator
 
 from main_functions import *
@@ -177,15 +177,20 @@ class StatisticalApplication(QMainWindow):
         self.generate_dist_button = QPushButton("🎲Random distributions and hypotheses test")
         self.generate_dist_button.setCheckable(True)
 
+        self.homogeneity_button = QPushButton("⚖️Homogeneity tests")
+        self.homogeneity_button.setCheckable(True)
+
         # Create button group for exclusive selection
         self.view_button_group = QButtonGroup()
         self.view_button_group.addButton(self.analysis_button, 1)
         self.view_button_group.addButton(self.transform_button, 2) 
         self.view_button_group.addButton(self.generate_dist_button, 3)
+        self.view_button_group.addButton(self.homogeneity_button, 4)
 
         mode_buttons_layout.addWidget(self.analysis_button) 
         mode_buttons_layout.addWidget(self.transform_button)     
         mode_buttons_layout.addWidget(self.generate_dist_button)
+        mode_buttons_layout.addWidget(self.homogeneity_button)
 
         mode_buttons_layout.addStretch()
         main_layout.addLayout(mode_buttons_layout)
@@ -394,16 +399,98 @@ class StatisticalApplication(QMainWindow):
         generation_layout.addLayout(t_test_layout)
         generation_layout.addStretch()
 
-        # Add both panels to the stacked widget
+        self.homogeneity_panel = QWidget()
+        homogeneity_layout = QHBoxLayout(self.homogeneity_panel)
+
+        # --- Left side: Controls/Inputs ---
+        self.choosing_layout = QVBoxLayout()
+
+        # Section: Choose two distributions
+        two_distros_label = QLabel("Choose two arbitrary distributions:")
+        self.choosing_layout.addWidget(two_distros_label)
+
+        self.choose_1_dist = QPushButton("FIRST")
+        self.file_dist_status_1 = QLabel("(file isn't loaded yet)")
+        dist1_layout = QHBoxLayout()
+        dist1_layout.addWidget(self.choose_1_dist)
+        dist1_layout.addWidget(self.file_dist_status_1)
+
+        self.choose_2_dist = QPushButton("SECOND")
+        self.file_dist_status_2 = QLabel("(file isn't loaded yet)")
+        dist2_layout = QHBoxLayout()
+        dist2_layout.addWidget(self.choose_2_dist)
+        dist2_layout.addWidget(self.file_dist_status_2)
+
+        choose_btns_layout = QVBoxLayout()
+        choose_btns_layout.addLayout(dist1_layout)
+        choose_btns_layout.addLayout(dist2_layout)
+
+        self.choosing_layout.addLayout(choose_btns_layout)
+
+        # Section: Two-sample analysis options
+        two_sample_section_label = QLabel("Two-sample options:")
+        note_1 = QLabel("Note: Suitable for normal-like distributions.")
+        self.choosing_layout.addWidget(two_sample_section_label)
+        self.choosing_layout.addWidget(note_1)
+
+        two_sample_checkboxes = QVBoxLayout()
+        self.two_disp_mean_compare = QCheckBox("Compare dispersion and mean")
+        self.two_disp_mean_criterias = QCheckBox("Perform criterias")
+        self.perform_button_one = QPushButton("Perform")
+        two_sample_checkboxes.addWidget(self.two_disp_mean_compare)
+        two_sample_checkboxes.addWidget(self.two_disp_mean_criterias)
+        self.choosing_layout.addLayout(two_sample_checkboxes)
+        self.choosing_layout.addWidget(self.perform_button_one)
+
+        # Section: Many-sample analysis options
+        many_sample_section_label = QLabel("Many-sample criterias:")
+        note_2 = QLabel("Note: Parametric tests need normal-like distributions.")
+        self.choosing_layout.addWidget(many_sample_section_label)
+        self.choosing_layout.addWidget(note_2)
+
+        many_sample_checkboxes = QVBoxLayout()
+        self.many_samples_normal_criteria = QCheckBox("Normal distribution criteria")
+        self.many_samples_non_normal_criteria = QCheckBox("Non-normal distribution criteria")
+        self.perform_button_two = QPushButton("Perform")
+
+        many_sample_checkboxes.addWidget(self.many_samples_normal_criteria)
+        many_sample_checkboxes.addWidget(self.many_samples_non_normal_criteria)
+        self.choosing_layout.addLayout(many_sample_checkboxes)
+        self.choosing_layout.addWidget(self.perform_button_two)
+
+
+        # Add choosing layout to the main homogeneity layout (left side)
+        homogeneity_layout.addLayout(self.choosing_layout, stretch=1)
+
+
+        # --- Right side: Output display ---
+        self.output_dist_layout = QVBoxLayout()
+
+        self.output_1_dist_text = QTextEdit()
+        self.output_1_dist_text.setReadOnly(True)
+        self.output_1_dist_text.setPlainText("Two samples test results:")
+        self.output_dist_layout.addWidget(self.output_1_dist_text)
+
+        self.output_2_dist_text = QTextEdit()
+        self.output_2_dist_text.setReadOnly(True)
+        self.output_2_dist_text.setPlainText("Many samples test results:")
+        self.output_dist_layout.addWidget(self.output_2_dist_text)
+
+        # Add output layout to the main homogeneity layout (right side)
+        homogeneity_layout.addLayout(self.output_dist_layout, stretch=2)
+
+
+        # --- Add to stacked widget ---
         self.stacked_widget.addWidget(self.analysis_panel)
         self.stacked_widget.addWidget(self.transform_panel)
         self.stacked_widget.addWidget(self.generation_panel)
-        
-        # Connect view switching buttons
+        self.stacked_widget.addWidget(self.homogeneity_panel)
+
+        # --- Connect buttons to switch views ---
         self.analysis_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.transform_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         self.generate_dist_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
-
+        self.homogeneity_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
 
     def _connect_signals(self):
         self.file_button.clicked.connect(self._load_data)
@@ -555,43 +642,41 @@ class StatisticalApplication(QMainWindow):
         #alpha = significance_level
         sample_sizes_str = ["20", "50", "100", "400", "1000", "2000", "5000"]
         sample_sizes_int =[int(element) for element in sample_sizes_str]
-        experiment_amount = 450
+        experiment_amount = 600
         for idx, sample_size in enumerate(sample_sizes_int):
-            if significance_level <= 0:
-                alpha = alpha_values[idx]
-            else:
-                alpha = significance_level
-            estimated_lambdas = []
-            estimated_t_statistics = []
-            for _ in range(experiment_amount):
-                #sample
-                simulated_exp_distr = generate_exp_theoretical_dist(sample_size, true_param_value)
-                sample_mean = arithmetic_mean(simulated_exp_distr)
-                sample_std = math.sqrt(unbiased_sample_variance(simulated_exp_distr, sample_mean))
-                #estimated lambda
+                if significance_level <= 0:
+                    alpha = alpha_values[idx]
+                else:
+                    alpha = significance_level
+                estimated_lambdas     = []
+                estimated_t_statistics = []
+                for _ in range(experiment_amount):
+                    simulated_exp_distr = generate_exp_theoretical_dist(sample_size, true_param_value)
+                    sample_mean = arithmetic_mean(simulated_exp_distr)
+                    sample_std  = math.sqrt(unbiased_sample_variance(simulated_exp_distr, sample_mean))
 
-                estimated_lambda = 1/sample_mean
-                estimated_lambdas.append(estimated_lambda)
-                #se_estimated_lambda = estimated_lambda/math.sqrt(sample_size)
-                true_mean = 1/true_param_value
-                #t-statistics
-                t_stat = (sample_mean-true_mean)/(sample_std/math.sqrt(sample_size))
-                estimated_t_statistics.append(t_stat)
-            #lambdas values
-            mean_estimated_lambdas = arithmetic_mean(estimated_lambdas)
-            std_estimated_lambdas = math.sqrt(unbiased_sample_variance(estimated_lambdas, mean_estimated_lambdas))
-            #t-statistics values
-            mean_estimated_t_statistics = arithmetic_mean(estimated_t_statistics)
-            std_estimated_t_statistics = math.sqrt(unbiased_sample_variance(estimated_t_statistics, mean_estimated_t_statistics))
-            #TODO: разобраться с этой хуйней
-            t_critical = t.ppf(1-alpha/2, sample_size-1)
+                    estimated_lambda = 1.0 / sample_mean
+                    estimated_lambdas.append(estimated_lambda)
+                    # H₀: μ = 1/λ
+                    true_mean = 1.0 / true_param_value
+                    t_stat = (sample_mean - true_mean) / (sample_std / math.sqrt(sample_size))
+                    estimated_t_statistics.append(t_stat)
 
-            self.t_test_result_table.setItem(idx, 0, QTableWidgetItem(f"{mean_estimated_lambdas:.4f}"))
-            self.t_test_result_table.setItem(idx, 1, QTableWidgetItem(f"{std_estimated_lambdas:.4f}"))
-            self.t_test_result_table.setItem(idx, 2, QTableWidgetItem(f"{mean_estimated_t_statistics:.4f}"))
-            self.t_test_result_table.setItem(idx, 3, QTableWidgetItem(f"{std_estimated_t_statistics:.4f}"))
-            self.t_test_result_table.setItem(idx, 4, QTableWidgetItem(f"{t_critical:.4f}"))
-            self.t_test_result_table.setItem(idx, 5, QTableWidgetItem(f"{alpha}"))
+                mean_estimated_lambdas = arithmetic_mean(estimated_lambdas)
+                std_estimated_lambdas = math.sqrt(unbiased_sample_variance(estimated_lambdas, mean_estimated_lambdas))
+
+                mean_estimated_t = arithmetic_mean(estimated_t_statistics)
+                std_estimated_t  = math.sqrt(unbiased_sample_variance(estimated_t_statistics,mean_estimated_t))
+
+                df = sample_size - 1
+                t_crit = t.ppf(1 - alpha/2, df)
+
+                self.t_test_result_table.setItem(idx, 0, QTableWidgetItem(f"{mean_estimated_lambdas:.4f}"))
+                self.t_test_result_table.setItem(idx, 1, QTableWidgetItem(f"{std_estimated_lambdas:.4f}"))
+                self.t_test_result_table.setItem(idx, 2, QTableWidgetItem(f"{mean_estimated_t:.4f}"))
+                self.t_test_result_table.setItem(idx, 3, QTableWidgetItem(f"{std_estimated_t:.4f}"))
+                self.t_test_result_table.setItem(idx, 4, QTableWidgetItem(f"{t_crit:.4f}"))
+                self.t_test_result_table.setItem(idx, 5, QTableWidgetItem(f"{alpha:.2f}"))
         
     def show_prob_paper(self):
         if self.ExpHelpWindow is None:

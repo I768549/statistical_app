@@ -1035,291 +1035,192 @@ class StatisticalApplication(QMainWindow):
                     QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
     def _perform_lab2(self):
         try:
-            n_str = self.size_line_1.text().strip()
-            alpha_str = self.alpha_value_line.text().strip()
-            if not n_str or int(n_str) == 0:
-                QMessageBox.warning(self, "Generating Error", "You must enter n")
-                return
-            else:
-                n = int(n_str)
-            if not alpha_str:
-                alpha = 0.05  # default fallback
-            else:
-                alpha = float(alpha_str)
+            n = int(self.size_line_1.text().strip())
+            if n <= 0:
+                raise ValueError("n must be > 0")
+        except ValueError:
+            QMessageBox.warning(self, "Generating Error", "Please enter a valid n")
+            return
+
+        try:
+            alpha_input = self.alpha_value_line.text().strip()
+            alpha = float(alpha_input) if alpha_input else 0.05
             if not (0 < alpha < 1):
                 raise ValueError
-        except:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a valid number for dist generation")
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Input", "Please enter a valid alpha in (0, 1)")
             return
+
+        # Override alpha if small sample size
         alpha_value = 0.05 if n > 30 else 0.3
-
-        selected_dist = self.falling_list_1.currentText()
-        dist_array = None
-        estimates = {}
-        se_estimates = {}
-        ci_estimates = {}  # Confidence intervals
-
-        # Critical value for 95% confidence interval (α = 0.05)
-        #z_alpha = norm.ppf(1 - alpha / 2)
         z_alpha = norm.ppf(1 - alpha_value / 2)
-        if selected_dist == "Exponential":
-            try:
+
+        dist_name = self.falling_list_1.currentText()
+        dist_array = None
+        estimates, se_estimates, ci_estimates = {}, {}, {}
+
+        try:
+            if dist_name == "Exponential":
                 lam = float(self.lambda_line_1.text().strip())
                 dist_array = generate_exp_theoretical_dist(n, lam)
-                # Estimate parameter λ (1/mean)
                 lambda_hat = 1 / np.mean(dist_array)
+                se = lambda_hat / np.sqrt(n)
                 estimates['λ'] = lambda_hat
-                # Standard error
-                se_lambda = lambda_hat / np.sqrt(n)
-                se_estimates['λ'] = se_lambda
-                # 95% confidence interval
-                ci_lambda = (lambda_hat - z_alpha * se_lambda, lambda_hat + z_alpha * se_lambda)
-                ci_estimates['λ'] = ci_lambda
-            except:
-                QMessageBox.warning(self, "Invalid Input", "Please enter a valid λ for Exponential")
-                return
+                se_estimates['λ'] = se
+                ci_estimates['λ'] = (lambda_hat - z_alpha * se, lambda_hat + z_alpha * se)
 
-        elif selected_dist == "Uniform":
-            try:
+            elif dist_name == "Uniform":
                 a = float(self.a_line_1.text().strip())
                 b = float(self.b_line_1.text().strip())
                 dist_array = generate_uniform_theoretical_dist(n, a, b)
-                # Estimate parameters a and b
-                a_hat = min(dist_array)
-                b_hat = max(dist_array)
-                estimates['a'] = a_hat
-                estimates['b'] = b_hat
-                # Standard error (approximation)
+                a_hat, b_hat = min(dist_array), max(dist_array)
                 range_est = b_hat - a_hat
-                se_a = range_est / math.sqrt(n * (n + 1))
-                se_b = se_a
-                se_estimates['a'] = se_a
-                se_estimates['b'] = se_b
-                # 95% confidence interval (approximation)
-                ci_a = (a_hat - z_alpha * se_a, a_hat + z_alpha * se_a)
-                ci_b = (b_hat - z_alpha * se_b, b_hat + z_alpha * se_b)
-                ci_estimates['a'] = ci_a
-                ci_estimates['b'] = ci_b
-            except:
-                QMessageBox.warning(self, "Invalid Input", "Please enter valid a and b for Uniform")
-                return
+                se = range_est / math.sqrt(n * (n + 1))
+                estimates.update({'a': a_hat, 'b': b_hat})
+                se_estimates.update({'a': se, 'b': se})
+                ci_estimates['a'] = (a_hat - z_alpha * se, a_hat + z_alpha * se)
+                ci_estimates['b'] = (b_hat - z_alpha * se, b_hat + z_alpha * se)
 
-        elif selected_dist == "Weibull":
-            try:
-                alpha = float(self.alpha_line_1.text().strip())
+            elif dist_name == "Weibull":
+                alpha_weibull = float(self.alpha_line_1.text().strip())
                 beta = float(self.beta_line_1.text().strip())
-                dist_array = generate_weibull_theoretical_dist(n, alpha, beta)
-                # Estimate parameters
+                dist_array = generate_weibull_theoretical_dist(n, alpha_weibull, beta)
                 alpha_hat, beta_hat = estimate_weibull_moments(dist_array)
+                se_alpha, se_beta = alpha_hat / math.sqrt(n), beta_hat / math.sqrt(n)
+                estimates.update({'α (shape)': alpha_hat, 'β (scale)': beta_hat})
+                se_estimates.update({'α (shape)': se_alpha, 'β (scale)': se_beta})
+                ci_estimates['α (shape)'] = (alpha_hat - z_alpha * se_alpha, alpha_hat + z_alpha * se_alpha)
+                ci_estimates['β (scale)'] = (beta_hat - z_alpha * se_beta, beta_hat + z_alpha * se_beta)
 
-                estimates['α (shape)'] = alpha_hat
-                estimates['β (scale)'] = beta_hat
-
-                # Standard error approximations
-                se_alpha = alpha_hat / math.sqrt(n)
-                se_beta = beta_hat / math.sqrt(n)
-                se_estimates['α (shape)'] = se_alpha
-                se_estimates['β (scale)'] = se_beta
-
-                # 95% confidence intervals
-                ci_alpha = (alpha_hat - z_alpha * se_alpha, alpha_hat + z_alpha * se_alpha)
-                ci_beta = (beta_hat - z_alpha * se_beta, beta_hat + z_alpha * se_beta)
-                ci_estimates['α (shape)'] = ci_alpha
-                ci_estimates['β (scale)'] = ci_beta
-            except:
-                QMessageBox.warning(self, "Invalid Input", "Please enter valid α and β for Weibull")
-
-        elif selected_dist == "Normal":
-            try:
+            elif dist_name == "Normal":
                 mean = float(self.mean_line_1.text().strip())
                 std = float(self.std_line_1.text().strip())
                 if std <= 0:
                     raise ValueError("Standard deviation must be positive")
                 dist_array = generate_normal_box_muller_distribution(n, mean, std)
-                # Estimate parameters μ and σ
                 mu_hat = arithmetic_mean(dist_array)
-                sigma_hat = biased_sample_variance(dist_array, mu_hat)  # MLE variance
-                estimates['μ'] = mu_hat
-                estimates['σ'] = sigma_hat
-                # Standard errors
-                se_mu = sigma_hat / math.sqrt(n)
-                se_sigma = sigma_hat * math.sqrt(2 / n)
-                se_estimates['μ'] = se_mu
-                se_estimates['σ'] = se_sigma
-                # 95% confidence interval
-                ci_mu = (mu_hat - z_alpha * se_mu, mu_hat + z_alpha * se_mu)
-                ci_sigma = (sigma_hat - z_alpha * se_sigma, sigma_hat + z_alpha * se_sigma)
-                ci_estimates['μ'] = ci_mu
-                ci_estimates['σ'] = ci_sigma
-            except ValueError as e:
-                QMessageBox.warning(self, "Invalid Input", f"Please enter valid mean and std for Normal: {str(e)}")
-                return
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Error generating Normal distribution: {str(e)}")
-                return
+                sigma_hat = biased_sample_variance(dist_array, mu_hat)
+                se_mu, se_sigma = sigma_hat / math.sqrt(n), sigma_hat * math.sqrt(2 / n)
+                estimates.update({'μ': mu_hat, 'σ': sigma_hat})
+                se_estimates.update({'μ': se_mu, 'σ': se_sigma})
+                ci_estimates['μ'] = (mu_hat - z_alpha * se_mu, mu_hat + z_alpha * se_mu)
+                ci_estimates['σ'] = (sigma_hat - z_alpha * se_sigma, sigma_hat + z_alpha * se_sigma)
 
-        elif selected_dist == "Laplace":
-            try:
+            elif dist_name == "Laplace":
                 lam = float(self.lam2_line_1.text().strip())
                 mean = float(self.mean2_line_1.text().strip())
                 dist_array = generate_laplace(mu=mean, b=lam, size=n)
-                # Estimate parameters μ and b
                 mu_hat = sample_median(dist_array)
-                b_hat = arithmetic_mean([abs(x - mu_hat) for x in dist_array]) 
-                estimates['μ'] = mu_hat
-                estimates['b'] = b_hat
-                # Standard errors
-                se_mu = b_hat / math.sqrt(n)
-                se_b = b_hat / math.sqrt(n)
-                se_estimates['μ'] = se_mu
-                se_estimates['b'] = se_b
-                # 95% confidence interval
-                ci_mu = (mu_hat - z_alpha * se_mu, mu_hat + z_alpha * se_mu)
-                ci_b = (b_hat - z_alpha * se_b, b_hat + z_alpha * se_b)
-                ci_estimates['μ'] = ci_mu
-                ci_estimates['b'] = ci_b
-            except ValueError as e:
-                QMessageBox.warning(self, "Invalid Input", f"Please enter valid λ and mean for Laplace: {str(e)}")
-                return
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Error generating Laplace distribution: {str(e)}")
-                return
+                b_hat = np.mean([abs(x - mu_hat) for x in dist_array])
+                se = b_hat / math.sqrt(n)
+                estimates.update({'μ': mu_hat, 'b': b_hat})
+                se_estimates.update({'μ': se, 'b': se})
+                ci_estimates['μ'] = (mu_hat - z_alpha * se, mu_hat + z_alpha * se)
+                ci_estimates['b'] = (b_hat - z_alpha * se, b_hat + z_alpha * se)
 
-        # Output results
-        result_text = f"Parameters Estimation:\n"
+        except Exception as e:
+            QMessageBox.warning(self, "Invalid Input", f"Error with {dist_name} parameters: {str(e)}")
+            return
+
+        # Output: estimates + intervals
+        output = "Parameters Estimation:\n"
         for param in estimates:
-            value = estimates[param]
-            se = se_estimates[param]
-            ci = ci_estimates[param]
-            #result_text += f"{param}: {value:.4f} (SE: {se:.4f}, {(100 * (1 - alpha)):.1f}% CI: [{ci[0]:.4f}, {ci[1]:.4f}])\n"
-            result_text += f"{param}: {value:.4f} (SE: {se:.4f}, {(100 * (1 - alpha_value)):.1f}% CI: [{ci[0]:.4f}, {ci[1]:.4f}])\n"
+            output += f"{param}: {estimates[param]:.4f} (SE: {se_estimates[param]:.4f}, CI: [{ci_estimates[param][0]:.4f}, {ci_estimates[param][1]:.4f}])\n"
+        self.simul_output.setPlainText(output)
 
-        self.simul_output.setPlainText(result_text)
+        # Prepare ECDF
         self.ecdf_sorted_data = sorted(dist_array)
-        self.ecdf_y_ = [i / len(self.ecdf_sorted_data) for i in range(1, len(self.ecdf_sorted_data) + 1)]
-        # Save sample for further use
+        self.ecdf_y_ = [i / n for i in range(1, n + 1)]
         self._load_data(external_data=dist_array)
-        #self._plot_ecdf_theor(self.ecdf_sorted_data, self.ecdf_y_, alpha)
-
         self._plot_ecdf_theor(self.ecdf_sorted_data, self.ecdf_y_, alpha_value)
 
-        result_text_2 = []
-        # Перевірка за критерієм Пірсона
-        k = self.bins_amount  # Кількість інтервалів
-
-        # Derive bin edges from midpoints and delta_h
-        delta_h = float(self.hist_info["delta_h"] )
+        # Pearson Chi² test
+        delta_h = float(self.hist_info["delta_h"])
         minimum = min(dist_array)
+        k = self.bins_amount
         bins_edges = np.linspace(minimum, minimum + k * delta_h, k + 1)
-
-        # Convert observed frequencies to numpy array for boolean masking
         observed_freq = np.array(self.frequencies_array, dtype=float)
 
-        # Теоретичні частоти
-        if selected_dist == "Normal":
-            mu, sigma = estimates['μ'], estimates['σ']
-            expected_freq = n * (
-                norm.cdf(bins_edges[1:], mu, sigma) -
-                norm.cdf(bins_edges[:-1], mu, sigma)
-            )
-        elif selected_dist == "Exponential":
-            lam = estimates['λ']
-            expected_freq = n * (
-                np.exp(-lam * bins_edges[:-1]) -
-                np.exp(-lam * bins_edges[1:])
-            )
-        elif selected_dist == "Uniform":
-            a, b = estimates['a'], estimates['b']
-            expected_freq = n * (bins_edges[1:] - bins_edges[:-1]) / (b - a)
-        elif selected_dist == "Weibull":
-            alpha, beta = estimates['α (shape)'], estimates['β (scale)']
-            expected_freq = n * (
-                weibull_min.cdf(bins_edges[1:], alpha, scale=beta) -
-                weibull_min.cdf(bins_edges[:-1], alpha, scale=beta)
-            )
-        elif selected_dist == "Laplace":
-            mu, b_param = estimates['μ'], estimates['b']
-            expected_freq = n * (
-                laplace.cdf(bins_edges[1:], mu, b_param) -
-                laplace.cdf(bins_edges[:-1], mu, b_param)
-            )
+        try:
+            if dist_name == "Normal":
+                mu, sigma = estimates['μ'], estimates['σ']
+                expected_freq = n * (norm.cdf(bins_edges[1:], mu, sigma) - norm.cdf(bins_edges[:-1], mu, sigma))
+            elif dist_name == "Exponential":
+                lam = estimates['λ']
+                expected_freq = n * (np.exp(-lam * bins_edges[:-1]) - np.exp(-lam * bins_edges[1:]))
+            elif dist_name == "Uniform":
+                a, b = estimates['a'], estimates['b']
+                expected_freq = n * (bins_edges[1:] - bins_edges[:-1]) / (b - a)
+            elif dist_name == "Weibull":
+                alpha_w, beta = estimates['α (shape)'], estimates['β (scale)']
+                expected_freq = n * (weibull_min.cdf(bins_edges[1:], alpha_w, scale=beta) -
+                                    weibull_min.cdf(bins_edges[:-1], alpha_w, scale=beta))
+            elif dist_name == "Laplace":
+                mu, b = estimates['μ'], estimates['b']
+                expected_freq = n * (laplace.cdf(bins_edges[1:], mu, b) - laplace.cdf(bins_edges[:-1], mu, b))
+        except:
+            expected_freq = np.zeros_like(observed_freq)
 
-        # Ігноруємо інтервали з очікуваною частотою < 5
         mask = expected_freq >= 5
-        if np.sum(mask) < 1:
-            result_text_2.append("Pearson χ²: Not enough valid bins (expected frequency < 5 in all bins)\n")
-            chi2_stat = np.nan
-            #p_value_chi2 = np.nan
-            df = 0
-        else:
+        chi2_stat = np.nan
+        if np.sum(mask) > 0:
             chi2_stat = np.sum((observed_freq[mask] - expected_freq[mask])**2 / expected_freq[mask])
             df = np.sum(mask) - 1 - len(estimates)
-            #p_value_chi2 = 1 - chi2.cdf(chi2_stat, df) if df > 0 else np.nan
+            critical_chi2 = chi2.ppf(1 - alpha_value, df) if df > 0 else np.nan
+        else:
+            df = 0
+            critical_chi2 = np.nan
 
-        # Колмогорів︠
-        self.ecdf_sorted_data = np.sort(dist_array)
-        # Теоретичний CDF
-        if selected_dist == "Normal":
-            theoretical_cdf = norm.cdf(self.ecdf_sorted_data, mu, sigma)
-        elif selected_dist == "Exponential":
-            theoretical_cdf = 1 - np.exp(-lam * self.ecdf_sorted_data)
-        elif selected_dist == "Uniform":
+        # Kolmogorov test
+        x_sorted = np.sort(dist_array)
+        if dist_name == "Normal":
+            theoretical_cdf = norm.cdf(x_sorted, mu, sigma)
+        elif dist_name == "Exponential":
+            theoretical_cdf = 1 - np.exp(-lam * x_sorted)
+        elif dist_name == "Uniform":
             a, b = estimates['a'], estimates['b']
-            theoretical_cdf = np.clip((self.ecdf_sorted_data - a) / (b - a), 0, 1)
-        elif selected_dist == "Weibull":
-            theoretical_cdf = weibull_min.cdf(self.ecdf_sorted_data, alpha_value, scale=beta)
-        elif selected_dist == "Laplace":
-            theoretical_cdf = laplace.cdf(self.ecdf_sorted_data, mu, b_param)
+            theoretical_cdf = np.clip((x_sorted - a) / (b - a), 0, 1)
+        elif dist_name == "Weibull":
+            theoretical_cdf = weibull_min.cdf(x_sorted, alpha_value, scale=beta)
+        elif dist_name == "Laplace":
+            theoretical_cdf = laplace.cdf(x_sorted, mu, b)
 
-        # ECDF values
-        self.ecdf_y_ = np.arange(1, len(self.ecdf_sorted_data) + 1) / len(self.ecdf_sorted_data)
-        D_n = np.max(np.abs(self.ecdf_y_ - theoretical_cdf))
+        empirical_cdf = np.arange(1, n + 1) / n
+        D_n = np.max(np.abs(empirical_cdf - theoretical_cdf))
         z = np.sqrt(n) * D_n
+        p_value_kol = 1 - np.exp(-2 * z**2)
 
-        # Approximate Kolmogorov distribution
-        k_sum = 0
-        for k in range(1, 100):  # Обмеження до 100 членів для наближення
-            f1 = k**2 - 0.5 * (1 - (-1)**k)
-            f2 = 5*k**2 + 22 - 7.5 * (1 - (-1)**k)  # Fixed typo from earlier code
-            term1 = (-1)**(k-1) * np.exp(-2*k**2*z**2) * (1 - (2*k**2*z**2)/np.sqrt(n) - (8*k**4*z**4)/(18*n) * (f1 - 4*(f2 + 3)*k**2*z**2) + (k**2*z**2)/(2*n) * ((k**2)/5 - (4*k**2 + 45*k**2*z**2)/15))
-            k_sum += term1
-        K_z = k_sum - z**3/n**2  # Оцінка з урахуванням вищих порядків
-        p_value_kol = 1 - K_z if K_z < 1 else 0.0
+        # Format test results
+        results = []
+        results.append("+--------------------------+---------------------+--------------------------+\n")
+        results.append("| Test                     | Criteria-value      | Compare-value            |\n")
+        results.append("+--------------------------+---------------------+--------------------------+\n")
 
-        # Output text
-        result_text_2.append("+--------------------------+---------------------+--------------------------+\n")
-        result_text_2.append("| Test                     | Criteria-value      | Compare-value            |\n")
-        result_text_2.append("+--------------------------+---------------------+--------------------------+\n")
-
-        # Pearson χ² output
-        if df > 0 and not np.isnan(chi2_stat):
-            critical_chi2 = chi2.ppf(1 - alpha_value, df)  # Use df instead of self.bins_amount-1 for correctness
-            result_text_2.append(f"| Pearson χ²               | {chi2_stat:>19.4f} | {critical_chi2:>24.4f} |\n")
+        if not np.isnan(chi2_stat) and df > 0:
+            results.append(f"| Pearson χ²               | {chi2_stat:>19.4f} | {critical_chi2:>24.4f} |\n")
         else:
-            result_text_2.append(f"| Pearson χ²               | {'Invalid':>19} | {'-':>24} |\n")
+            results.append(f"| Pearson χ²               | {'Invalid':>19} | {'-':>24} |\n")
 
-        # Kolmogorov output
-        result_text_2.append(f"| Kolmogorov               | {p_value_kol:>19.4f} | {alpha_value:>24.4f} |\n")
-        result_text_2.append("+--------------------------+---------------------+--------------------------+\n")
+        results.append(f"| Kolmogorov               | {p_value_kol:>19.4f} | {alpha_value:>24.4f} |\n")
+        results.append("+--------------------------+---------------------+--------------------------+\n")
 
-        # Decision logic (optional, based on critical value comparison)
-        if df > 0 and not np.isnan(chi2_stat):
+        if not np.isnan(chi2_stat) and df > 0:
             chi2_decision = "Accept" if chi2_stat <= critical_chi2 else "Reject"
-            result_text_2.append(f"\nPearson χ² test (χ² = {chi2_stat:.4f} {'≤' if chi2_decision == 'Accept' else '>'} critical = {critical_chi2:.4f}): {chi2_decision} H0 (data {'consistent with' if chi2_decision == 'Accept' else 'does not fit'} {selected_dist} distribution)\n")
+            results.append(f"\nPearson χ² test: {chi2_decision} H0 (χ² = {chi2_stat:.4f}, critical = {critical_chi2:.4f})\n")
         else:
-            result_text_2.append(f"\nPearson χ² test: Invalid (insufficient valid bins or df ≤ 0)\n")
+            results.append("\nPearson χ² test: Invalid (not enough bins or df <= 0)\n")
 
-        kolm_decision = "Accept" if p_value_kol > alpha_value else "Reject"
-        result_text_2.append(f"Kolmogorov test (p = {p_value_kol:.4f} {'>' if kolm_decision == 'Accept' else '≤'} α = {alpha_value:.4f}): {kolm_decision} H0 (data {'consistent with' if kolm_decision == 'Accept' else 'does not fit'} {selected_dist} distribution)\n")
+        kolmogorov_decision = "Accept" if p_value_kol > alpha_value else "Reject"
+        results.append(f"Kolmogorov test: {kolmogorov_decision} H0 (p = {p_value_kol:.4f}, α = {alpha_value:.4f})\n")
 
-        # Combined decision (optional)
-        if df > 0 and not np.isnan(chi2_stat):
-            overall_decision = "Accept" if (chi2_stat <= critical_chi2 and p_value_kol > alpha) else "Reject"
-            result_text_2.append(f"Overall (α = {alpha_value:.2f}): {overall_decision} H0 (data {'consistent with' if overall_decision == 'Accept' else 'does not fit'} {selected_dist} distribution)\n")
+        if not np.isnan(chi2_stat) and df > 0:
+            overall = "Accept" if (chi2_stat <= critical_chi2 and p_value_kol > alpha_value) else "Reject"
+            results.append(f"Overall Decision (α = {alpha_value:.2f}): {overall} H0\n")
         else:
-            result_text_2.append(f"Overall (α = {alpha_value:.2f}): Relying on Kolmogorov test only - {kolm_decision} H0\n")
+            results.append(f"Overall (α = {alpha_value:.2f}): Based on Kolmogorov only - {kolmogorov_decision} H0\n")
 
-        self.kolm_pearson_output.setPlainText(''.join(result_text_2))
+        self.kolm_pearson_output.setPlainText(''.join(results))
+
 
 
     def _update_analysis(self):

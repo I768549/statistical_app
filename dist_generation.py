@@ -1,5 +1,8 @@
 import random
 import math
+from scipy.special import gamma
+from scipy.optimize import fsolve
+
 def generate_exp_theoretical_dist(size, lam = 1):
     return [(math.log(1 - random.random())/-lam) for _ in range(size)]
 
@@ -33,6 +36,27 @@ def generate_laplace(mu=0, b=1, size=1):
         result.append(x)
     
     return result if size > 1 else result[0]
+
+def estimate_weibull_moments(data):
+    n = len(data)
+    mean_sample = sum(data) / n
+    var_sample = sum((x - mean_sample) ** 2 for x in data) / n
+
+    # Function to solve for α
+    def equation(alpha):
+        g1 = gamma(1 + 1/alpha)
+        g2 = gamma(1 + 2/alpha)
+        return (var_sample / (mean_sample ** 2)) - (g2 / (g1 ** 2) - 1)
+
+    # Initial guess for α
+    alpha_initial_guess = 1.0
+    alpha_solution = fsolve(equation, alpha_initial_guess)[0]
+
+    # Estimate β
+    beta_est = mean_sample / gamma(1 + 1 / alpha_solution)
+
+    return alpha_solution, beta_est
+
 
 
 

@@ -1,13 +1,18 @@
 import sys
 import numpy as np
 from scipy.stats import t
+from scipy.stats import norm, weibull_min, laplace, chi2
+
+
 import math
 import pyqtgraph as pg
+from PyQt6.QtCore import Qt
+
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QLineEdit, QTabWidget,QTableWidget, QHeaderView, QTableWidgetItem,
                              QRadioButton, QButtonGroup, QGroupBox, QTextEdit,
-                             QMessageBox, QFileDialog, QSizePolicy, QStackedWidget, QComboBox, QCheckBox)
+                             QMessageBox, QFileDialog, QSizePolicy, QStackedWidget, QComboBox, QCheckBox, QFormLayout)
 from PyQt6.QtGui import QIcon, QFontDatabase, QDoubleValidator, QIntValidator
 
 from main_functions import *
@@ -51,7 +56,6 @@ class StatisticalApplication(QMainWindow):
         
     def _initialize_ui(self):
         self.setWindowTitle('Statistical Application')
-
         try:
             self.setWindowIcon(QIcon('smile.png'))
         except Exception as e:
@@ -174,11 +178,15 @@ class StatisticalApplication(QMainWindow):
         self.transform_button = QPushButton("🔄 Transform View")
         self.transform_button.setCheckable(True)
 
-        self.generate_dist_button = QPushButton("🎲Random distributions and hypotheses test")
+        self.generate_dist_button = QPushButton("🎲 Random distributions and hypotheses test")
         self.generate_dist_button.setCheckable(True)
 
-        self.homogeneity_button = QPushButton("⚖️Homogeneity tests")
+        self.homogeneity_button = QPushButton("⚖️ Homogeneity tests")
         self.homogeneity_button.setCheckable(True)
+
+        self.reproduction_button = QPushButton("🧪 Experiments on distributions")
+        self.reproduction_button.setCheckable(True)
+
 
         # Create button group for exclusive selection
         self.view_button_group = QButtonGroup()
@@ -186,11 +194,15 @@ class StatisticalApplication(QMainWindow):
         self.view_button_group.addButton(self.transform_button, 2) 
         self.view_button_group.addButton(self.generate_dist_button, 3)
         self.view_button_group.addButton(self.homogeneity_button, 4)
+        self.view_button_group.addButton(self.reproduction_button, 5)
+
 
         mode_buttons_layout.addWidget(self.analysis_button) 
         mode_buttons_layout.addWidget(self.transform_button)     
         mode_buttons_layout.addWidget(self.generate_dist_button)
         mode_buttons_layout.addWidget(self.homogeneity_button)
+        mode_buttons_layout.addWidget(self.reproduction_button)
+
 
         mode_buttons_layout.addStretch()
         main_layout.addLayout(mode_buttons_layout)
@@ -206,7 +218,7 @@ class StatisticalApplication(QMainWindow):
         stats_label = QLabel("Statistics:")
         self.statistics_output = QTextEdit()
         self.statistics_output.setReadOnly(True)
-        self.statistics_output.setMinimumHeight(250)
+        #TODO self.statistics_output.setMaximumHeight(250)
         font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         self.statistics_output.setFont(font)
         analysis_layout.addWidget(stats_label)
@@ -265,7 +277,7 @@ class StatisticalApplication(QMainWindow):
         self.falling_list = QComboBox()
         self.falling_list.addItems(["Exponential", "Normal", "Weibull", "Uniform", "Laplace"])
         size_label = QLabel("Size n: ")
-        self.size_line = QLineEdit()
+        self.size_line = QLineEdit("5000")
 
         dist_chooser_layout.addWidget(self.generate_distribution_push_button)
         dist_chooser_layout.addWidget(self.falling_list)
@@ -277,7 +289,7 @@ class StatisticalApplication(QMainWindow):
 
         #Exp
         self.lambda_label = QLabel("Lambda: ")
-        self.lambda_line = QLineEdit("0")
+        self.lambda_line = QLineEdit("6")
         self.params_layout.addWidget(self.lambda_label)
         self.params_layout.addWidget(self.lambda_line)
         self.lambda_label.hide()
@@ -286,8 +298,8 @@ class StatisticalApplication(QMainWindow):
         #Uniform
         self.a_label = QLabel("a: ")
         self.b_label = QLabel("b: ")
-        self.a_line = QLineEdit("0")
-        self.b_line = QLineEdit("1")
+        self.a_line = QLineEdit("5")
+        self.b_line = QLineEdit("3")
 
         self.params_layout.addWidget(self.a_label)
         self.params_layout.addWidget(self.a_line)
@@ -302,8 +314,8 @@ class StatisticalApplication(QMainWindow):
         #Laplace
         self.lam2_label = QLabel("lambda: ")
         self.mean2_label = QLabel("mean: ")
-        self.lam2_line = QLineEdit("0")
-        self.mean2_line = QLineEdit("1")
+        self.lam2_line = QLineEdit("30")
+        self.mean2_line = QLineEdit("0")
 
         self.params_layout.addWidget(self.lam2_label)
         self.params_layout.addWidget(self.lam2_line)
@@ -318,7 +330,7 @@ class StatisticalApplication(QMainWindow):
 
         #Weibull
         self.alpha_label = QLabel("alpha: ")
-        self.alpha_line = QLineEdit("1")
+        self.alpha_line = QLineEdit("1.5")
         self.beta_label = QLabel("beta: ")
         self.beta_line = QLineEdit("1")
 
@@ -491,10 +503,129 @@ class StatisticalApplication(QMainWindow):
         self.transform_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         self.generate_dist_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         self.homogeneity_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
+        self.reproduction_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(4))
+
+        self.reproduction_panel = QWidget()
+        self.reproduction_layout = QVBoxLayout(self.reproduction_panel)
+        self.reproduction_layout.addWidget(QLabel("Choose distribution type, size of it and specify the parameters to perform a simulation"))
+        # --- Top Layout: all inline ---
+        top_layout = QHBoxLayout()
+
+        # Distribution selector
+        self.falling_list_1 = QComboBox()
+        self.falling_list_1.addItems(["Exponential", "Normal", "Weibull", "Uniform", "Laplace"])
+        top_layout.addWidget(QLabel("Distribution:"))
+        top_layout.addWidget(self.falling_list_1)
+
+        # Size
+        self.size_label_1 = QLabel("Size n:")
+        self.size_line_1 = QLineEdit("5000")
+        self.size_line_1.setFixedWidth(60)
+        top_layout.addWidget(self.size_label_1)
+        top_layout.addWidget(self.size_line_1)
+
+        # --- Parameters (compact) ---
+        self.params_form_layout_1 = QFormLayout()
+        self.params_form_layout_1.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        # Exponential
+        self.lambda_label_1 = QLabel("Lambda:")
+        self.lambda_line_1 = QLineEdit("6")
+        self.params_form_layout_1.addRow(self.lambda_label_1, self.lambda_line_1)
+
+        # Uniform
+        self.a_label_1 = QLabel("a:")
+        self.a_line_1 = QLineEdit("5")
+        self.b_label_1 = QLabel("b:")
+        self.b_line_1 = QLineEdit("3")
+        self.params_form_layout_1.addRow(self.a_label_1, self.a_line_1)
+        self.params_form_layout_1.addRow(self.b_label_1, self.b_line_1)
+
+        # Laplace
+        self.lam2_label_1 = QLabel("lambda:")
+        self.lam2_line_1 = QLineEdit("20")
+        self.mean2_label_1 = QLabel("mean:")
+        self.mean2_line_1 = QLineEdit("0")
+        self.params_form_layout_1.addRow(self.lam2_label_1, self.lam2_line_1)
+        self.params_form_layout_1.addRow(self.mean2_label_1, self.mean2_line_1)
+
+        # Weibull
+        self.alpha_label_1 = QLabel("alpha:")
+        self.alpha_line_1 = QLineEdit("1")
+        self.beta_label_1 = QLabel("beta:")
+        self.beta_line_1 = QLineEdit("1")
+        self.params_form_layout_1.addRow(self.alpha_label_1, self.alpha_line_1)
+        self.params_form_layout_1.addRow(self.beta_label_1, self.beta_line_1)
+
+        # Normal
+        self.mean_label_1 = QLabel("mean:")
+        self.mean_line_1 = QLineEdit("0")
+        self.std_label_1 = QLabel("std:")
+        self.std_line_1 = QLineEdit("1")
+        self.params_form_layout_1.addRow(self.mean_label_1, self.mean_line_1)
+        self.params_form_layout_1.addRow(self.std_label_1, self.std_line_1)
+
+        # Hide all by default
+        for w in [
+            self.lambda_label_1, self.lambda_line_1,
+            self.a_label_1, self.a_line_1, self.b_label_1, self.b_line_1,
+            self.lam2_label_1, self.lam2_line_1, self.mean2_label_1, self.mean2_line_1,
+            self.alpha_label_1, self.alpha_line_1, self.beta_label_1, self.beta_line_1,
+            self.mean_label_1, self.mean_line_1, self.std_label_1, self.std_line_1
+        ]:
+            w.hide()
+
+        # Put form into a container
+        param_container = QWidget()
+        param_container.setLayout(self.params_form_layout_1)
+        top_layout.addWidget(param_container)
+
+        # Button
+        self.generate_distribution_push_button_1 = QPushButton("Perform a simulation")
+        top_layout.addWidget(self.generate_distribution_push_button_1)
+
+        self.reproduction_layout.addLayout(top_layout)
+        self.shit = QHBoxLayout()
+        output_simul_label = QLabel("Parameters estimation and evaluation of their error ")
+        self.alpha_value_line = QLineEdit("0.05")
+        self.alpha_value_line.setMaximumWidth(60)
+        self.shit.addWidget(output_simul_label)
+        self.shit.addWidget(self.alpha_value_line)
+
+        self.simul_output = QTextEdit()
+        self.simul_output.setReadOnly(True)
+        self.simul_output.setMaximumHeight(70)
+        font_1 = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        self.simul_output.setFont(font_1)
+        self.reproduction_layout.addLayout(self.shit)
+        self.reproduction_layout.addWidget(self.simul_output)
+
+        self.kolm_pearson_output = QTextEdit()
+        self.kolm_pearson_output.setReadOnly(True)
+        self.kolm_pearson_output.setMaximumHeight(200)
+        self.kolm_pearson_output.setFont(font_1)
+        self.reproduction_layout.addWidget(self.kolm_pearson_output)
+
+
+
+
+
+        # --- Add to stacked widget ---
+        self.stacked_widget.addWidget(self.analysis_panel)
+        self.stacked_widget.addWidget(self.transform_panel)
+        self.stacked_widget.addWidget(self.generation_panel)
+        self.stacked_widget.addWidget(self.homogeneity_panel)
+        self.stacked_widget.addWidget(self.reproduction_panel)
+
+        # --- Connect buttons to switch views ---
+        self.analysis_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        self.transform_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
+        self.generate_dist_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
+        self.homogeneity_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
+        self.reproduction_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(4))
 
     def _connect_signals(self):
-        self.file_button.clicked.connect(self._load_data)
-        self.update_button.clicked.connect(self._update_analysis)
+        self.file_button.clicked.connect(lambda: self._load_data(external_data=None))  
 
         self.rd_custom.toggled.connect(self.custom_entry.setEnabled)
         self.rd_del_outliers.toggled.connect(self.quantile_entry.setEnabled)
@@ -508,8 +639,11 @@ class StatisticalApplication(QMainWindow):
         self.apply_log_button.clicked.connect(self._apply_logarithm)
         self.apply_standartization_button.clicked.connect(self._standartise_data)
         self.generate_distribution_push_button.clicked.connect(self._generate_distribution)
+        self.generate_distribution_push_button_1.clicked.connect(self._perform_lab2)
+
         self.reset_data_button.clicked.connect(self._reset_data)
         self.falling_list.currentTextChanged.connect(self._update_ui_state)
+        self.falling_list_1.currentTextChanged.connect(self._update_ui_state)
 
 
     def _reset_data(self):
@@ -596,40 +730,131 @@ class StatisticalApplication(QMainWindow):
             self.lam2_line.show()
             self.mean2_label.show()
             self.mean2_line.show()
+        
+        self.current_dist_1 = self.falling_list_1.currentText()
 
-    def _load_data(self):
-        file_name, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select a file with distribution data",
-            "",
-            "Text files (*.txt);;Data files (*.dat);;All files (*)"
-        )
-        if not file_name:
-            return
+        # Hide all param widgets
+        self.lambda_label_1.hide()
+        self.lambda_line_1.hide()
 
-        try:
-            self.raw_dist_data = read_distribution(file_name)
-            self.processed_data = self.raw_dist_data.copy()
-            self.current_file_path = file_name
-            self.file_label.setText(f"Loaded: {QtCore.QFileInfo(file_name).fileName()}")
-            self.file_label.setToolTip(file_name)
-            self.modifications_log = ["Data loaded from file."]
-            self._update_ui_state()
-            self._update_analysis()
-            self.stacked_widget.setCurrentIndex(0)  # Switch to analysis view
+        self.a_label_1.hide()
+        self.a_line_1.hide()
+        self.b_label_1.hide()
+        self.b_line_1.hide()
 
-        except Exception as e:
-            error_message = f"File loading error:\n{str(e)}"
-            QMessageBox.critical(self, "File Error", error_message)
-            self.raw_dist_data = None
-            self.processed_data = None
-            self.current_file_path = ""
-            self.file_label.setText("File loading error.")
-            self.file_label.setToolTip("")
-            self.modifications_log = []
-            self._clear_plots_and_stats()
-            self._update_ui_state()
+        self.alpha_label_1.hide()
+        self.alpha_line_1.hide()
+        self.beta_label_1.hide()
+        self.beta_line_1.hide()
 
+        self.mean_label_1.hide()
+        self.mean_line_1.hide()
+        self.std_label_1.hide()
+        self.std_line_1.hide()
+
+        self.lam2_label_1.hide()
+        self.lam2_line_1.hide()
+        self.mean2_label_1.hide()
+        self.mean2_line_1.hide()
+
+        # Show relevant param widgets
+        if self.current_dist_1 == "Exponential":
+            self.lambda_label_1.show()
+            self.lambda_line_1.show()
+        elif self.current_dist_1 == "Uniform":
+            self.a_label_1.show()
+            self.a_line_1.show()
+            self.b_label_1.show()
+            self.b_line_1.show()
+        elif self.current_dist_1 == "Weibull":
+            self.alpha_label_1.show()
+            self.alpha_line_1.show()
+            self.beta_label_1.show()
+            self.beta_line_1.show()
+        elif self.current_dist_1 == "Normal":
+            self.mean_label_1.show()
+            self.mean_line_1.show()
+            self.std_label_1.show()
+            self.std_line_1.show()
+        elif self.current_dist_1 == "Laplace":
+            self.lam2_label_1.show()
+            self.lam2_line_1.show()
+            self.mean2_label_1.show()
+            self.mean2_line_1.show()
+
+    def _load_data(self, external_data=None):
+        print(f"DEBUG: _load_data called with external_data={external_data}, type={type(external_data)}")
+        if external_data is not None:
+            try:
+                # Make sure external_data is a list or array that supports copy
+                if isinstance(external_data, (list, tuple)):
+                    # Convert to list if it's not already
+                    self.raw_dist_data = list(external_data)
+                    # Use list slicing to copy a list
+                    self.processed_data = self.raw_dist_data[:]
+                elif hasattr(external_data, 'copy'):
+                    # For NumPy arrays or other objects with copy method
+                    self.raw_dist_data = external_data
+                    self.processed_data = self.raw_dist_data.copy()
+                else:
+                    # Handle unexpected types
+                    raise TypeError(f"Cannot load data of type {type(external_data).__name__}. Expected list, tuple, or array.")
+                
+                self.current_file_path = "Internal: Simulated Data"
+                self.file_label.setText("Loaded: Simulated Data")
+                self.file_label.setToolTip("Generated from Lab 2")
+                self.modifications_log = ["Data loaded from simulation."]
+                self._update_ui_state()
+                self._update_analysis()
+            except Exception as e:
+                QMessageBox.critical(self, "Simulation Error", f"Failed to load simulation data:\n{str(e)}")
+                self.raw_dist_data = None
+                self.processed_data = None
+                self.file_label.setText("Simulation load error.")
+                self.file_label.setToolTip("")
+                self.modifications_log = []
+                self._clear_plots_and_stats()
+                self._update_ui_state()
+                return
+        else:
+            # Fallback to file dialog
+            file_name, _ = QFileDialog.getOpenFileName(
+                self,
+                "Select a file with distribution data",
+                "",
+                "Text files (*.txt);;Data files (*.dat);;All files (*)"
+            )
+            if not file_name:
+                return
+            try:
+                self.raw_dist_data = read_distribution(file_name)
+                
+                # Same type checking for file-loaded data
+                if isinstance(self.raw_dist_data, (list, tuple)):
+                    self.processed_data = list(self.raw_dist_data)
+                elif hasattr(self.raw_dist_data, 'copy'):
+                    self.processed_data = self.raw_dist_data.copy()
+                else:
+                    raise TypeError(f"Unexpected data type: {type(self.raw_dist_data).__name__}")
+                    
+                self.current_file_path = file_name
+                self.file_label.setText(f"Loaded: {QtCore.QFileInfo(file_name).fileName()}")
+                self.file_label.setToolTip(file_name)
+                self.modifications_log = ["Data loaded from file."]
+                self._update_ui_state()
+                self._update_analysis()
+                self.stacked_widget.setCurrentIndex(0)
+            except Exception as e:
+                error_message = f"File loading error:\n{str(e)}"
+                QMessageBox.critical(self, "File Error", error_message)
+                self.raw_dist_data = None
+                self.processed_data = None
+                self.current_file_path = ""
+                self.file_label.setText("File loading error.")
+                self.file_label.setToolTip("")
+                self.modifications_log = []
+                self._clear_plots_and_stats()
+                self._update_ui_state()
     def handle_t_test(self):
         try:
             true_param_value = float(self.param_value_line.text())
@@ -808,8 +1033,295 @@ class StatisticalApplication(QMainWindow):
                     QMessageBox.information(self, "Success", f"Distribution saved to {file_path}")
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
-        
-    
+    def _perform_lab2(self):
+        try:
+            n_str = self.size_line_1.text().strip()
+            alpha_str = self.alpha_value_line.text().strip()
+            if not n_str or int(n_str) == 0:
+                QMessageBox.warning(self, "Generating Error", "You must enter n")
+                return
+            else:
+                n = int(n_str)
+            if not alpha_str:
+                alpha = 0.05  # default fallback
+            else:
+                alpha = float(alpha_str)
+            if not (0 < alpha < 1):
+                raise ValueError
+        except:
+            QMessageBox.warning(self, "Invalid Input", "Please enter a valid number for dist generation")
+            return
+        alpha_value = 0.05 if n > 30 else 0.3
+
+        selected_dist = self.falling_list_1.currentText()
+        dist_array = None
+        estimates = {}
+        se_estimates = {}
+        ci_estimates = {}  # Confidence intervals
+
+        # Critical value for 95% confidence interval (α = 0.05)
+        #z_alpha = norm.ppf(1 - alpha / 2)
+        z_alpha = norm.ppf(1 - alpha_value / 2)
+        if selected_dist == "Exponential":
+            try:
+                lam = float(self.lambda_line_1.text().strip())
+                dist_array = generate_exp_theoretical_dist(n, lam)
+                # Estimate parameter λ (1/mean)
+                lambda_hat = 1 / np.mean(dist_array)
+                estimates['λ'] = lambda_hat
+                # Standard error
+                se_lambda = lambda_hat / np.sqrt(n)
+                se_estimates['λ'] = se_lambda
+                # 95% confidence interval
+                ci_lambda = (lambda_hat - z_alpha * se_lambda, lambda_hat + z_alpha * se_lambda)
+                ci_estimates['λ'] = ci_lambda
+            except:
+                QMessageBox.warning(self, "Invalid Input", "Please enter a valid λ for Exponential")
+                return
+
+        elif selected_dist == "Uniform":
+            try:
+                a = float(self.a_line_1.text().strip())
+                b = float(self.b_line_1.text().strip())
+                dist_array = generate_uniform_theoretical_dist(n, a, b)
+                # Estimate parameters a and b
+                a_hat = min(dist_array)
+                b_hat = max(dist_array)
+                estimates['a'] = a_hat
+                estimates['b'] = b_hat
+                # Standard error (approximation)
+                range_est = b_hat - a_hat
+                se_a = range_est / math.sqrt(n * (n + 1))
+                se_b = se_a
+                se_estimates['a'] = se_a
+                se_estimates['b'] = se_b
+                # 95% confidence interval (approximation)
+                ci_a = (a_hat - z_alpha * se_a, a_hat + z_alpha * se_a)
+                ci_b = (b_hat - z_alpha * se_b, b_hat + z_alpha * se_b)
+                ci_estimates['a'] = ci_a
+                ci_estimates['b'] = ci_b
+            except:
+                QMessageBox.warning(self, "Invalid Input", "Please enter valid a and b for Uniform")
+                return
+
+        elif selected_dist == "Weibull":
+            try:
+                alpha = float(self.alpha_line_1.text().strip())
+                beta = float(self.beta_line_1.text().strip())
+                dist_array = generate_weibull_theoretical_dist(n, alpha, beta)
+                # Estimate parameters
+                alpha_hat, beta_hat = estimate_weibull_moments(dist_array)
+
+                estimates['α (shape)'] = alpha_hat
+                estimates['β (scale)'] = beta_hat
+
+                # Standard error approximations
+                se_alpha = alpha_hat / math.sqrt(n)
+                se_beta = beta_hat / math.sqrt(n)
+                se_estimates['α (shape)'] = se_alpha
+                se_estimates['β (scale)'] = se_beta
+
+                # 95% confidence intervals
+                ci_alpha = (alpha_hat - z_alpha * se_alpha, alpha_hat + z_alpha * se_alpha)
+                ci_beta = (beta_hat - z_alpha * se_beta, beta_hat + z_alpha * se_beta)
+                ci_estimates['α (shape)'] = ci_alpha
+                ci_estimates['β (scale)'] = ci_beta
+            except:
+                QMessageBox.warning(self, "Invalid Input", "Please enter valid α and β for Weibull")
+
+        elif selected_dist == "Normal":
+            try:
+                mean = float(self.mean_line_1.text().strip())
+                std = float(self.std_line_1.text().strip())
+                if std <= 0:
+                    raise ValueError("Standard deviation must be positive")
+                dist_array = generate_normal_box_muller_distribution(n, mean, std)
+                # Estimate parameters μ and σ
+                mu_hat = arithmetic_mean(dist_array)
+                sigma_hat = biased_sample_variance(dist_array, mu_hat)  # MLE variance
+                estimates['μ'] = mu_hat
+                estimates['σ'] = sigma_hat
+                # Standard errors
+                se_mu = sigma_hat / math.sqrt(n)
+                se_sigma = sigma_hat * math.sqrt(2 / n)
+                se_estimates['μ'] = se_mu
+                se_estimates['σ'] = se_sigma
+                # 95% confidence interval
+                ci_mu = (mu_hat - z_alpha * se_mu, mu_hat + z_alpha * se_mu)
+                ci_sigma = (sigma_hat - z_alpha * se_sigma, sigma_hat + z_alpha * se_sigma)
+                ci_estimates['μ'] = ci_mu
+                ci_estimates['σ'] = ci_sigma
+            except ValueError as e:
+                QMessageBox.warning(self, "Invalid Input", f"Please enter valid mean and std for Normal: {str(e)}")
+                return
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Error generating Normal distribution: {str(e)}")
+                return
+
+        elif selected_dist == "Laplace":
+            try:
+                lam = float(self.lam2_line_1.text().strip())
+                mean = float(self.mean2_line_1.text().strip())
+                dist_array = generate_laplace(mu=mean, b=lam, size=n)
+                # Estimate parameters μ and b
+                mu_hat = sample_median(dist_array)
+                b_hat = arithmetic_mean([abs(x - mu_hat) for x in dist_array]) 
+                estimates['μ'] = mu_hat
+                estimates['b'] = b_hat
+                # Standard errors
+                se_mu = b_hat / math.sqrt(n)
+                se_b = b_hat / math.sqrt(n)
+                se_estimates['μ'] = se_mu
+                se_estimates['b'] = se_b
+                # 95% confidence interval
+                ci_mu = (mu_hat - z_alpha * se_mu, mu_hat + z_alpha * se_mu)
+                ci_b = (b_hat - z_alpha * se_b, b_hat + z_alpha * se_b)
+                ci_estimates['μ'] = ci_mu
+                ci_estimates['b'] = ci_b
+            except ValueError as e:
+                QMessageBox.warning(self, "Invalid Input", f"Please enter valid λ and mean for Laplace: {str(e)}")
+                return
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Error generating Laplace distribution: {str(e)}")
+                return
+
+        # Output results
+        result_text = f"Parameters Estimation:\n"
+        for param in estimates:
+            value = estimates[param]
+            se = se_estimates[param]
+            ci = ci_estimates[param]
+            #result_text += f"{param}: {value:.4f} (SE: {se:.4f}, {(100 * (1 - alpha)):.1f}% CI: [{ci[0]:.4f}, {ci[1]:.4f}])\n"
+            result_text += f"{param}: {value:.4f} (SE: {se:.4f}, {(100 * (1 - alpha_value)):.1f}% CI: [{ci[0]:.4f}, {ci[1]:.4f}])\n"
+
+        self.simul_output.setPlainText(result_text)
+        self.ecdf_sorted_data = sorted(dist_array)
+        self.ecdf_y_ = [i / len(self.ecdf_sorted_data) for i in range(1, len(self.ecdf_sorted_data) + 1)]
+        # Save sample for further use
+        self._load_data(external_data=dist_array)
+        #self._plot_ecdf_theor(self.ecdf_sorted_data, self.ecdf_y_, alpha)
+
+        self._plot_ecdf_theor(self.ecdf_sorted_data, self.ecdf_y_, alpha_value)
+
+        result_text_2 = []
+        # Перевірка за критерієм Пірсона
+        k = self.bins_amount  # Кількість інтервалів
+
+        # Derive bin edges from midpoints and delta_h
+        delta_h = float(self.hist_info["delta_h"] )
+        minimum = min(dist_array)
+        bins_edges = np.linspace(minimum, minimum + k * delta_h, k + 1)
+
+        # Convert observed frequencies to numpy array for boolean masking
+        observed_freq = np.array(self.frequencies_array, dtype=float)
+
+        # Теоретичні частоти
+        if selected_dist == "Normal":
+            mu, sigma = estimates['μ'], estimates['σ']
+            expected_freq = n * (
+                norm.cdf(bins_edges[1:], mu, sigma) -
+                norm.cdf(bins_edges[:-1], mu, sigma)
+            )
+        elif selected_dist == "Exponential":
+            lam = estimates['λ']
+            expected_freq = n * (
+                np.exp(-lam * bins_edges[:-1]) -
+                np.exp(-lam * bins_edges[1:])
+            )
+        elif selected_dist == "Uniform":
+            a, b = estimates['a'], estimates['b']
+            expected_freq = n * (bins_edges[1:] - bins_edges[:-1]) / (b - a)
+        elif selected_dist == "Weibull":
+            alpha, beta = estimates['α (shape)'], estimates['β (scale)']
+            expected_freq = n * (
+                weibull_min.cdf(bins_edges[1:], alpha, scale=beta) -
+                weibull_min.cdf(bins_edges[:-1], alpha, scale=beta)
+            )
+        elif selected_dist == "Laplace":
+            mu, b_param = estimates['μ'], estimates['b']
+            expected_freq = n * (
+                laplace.cdf(bins_edges[1:], mu, b_param) -
+                laplace.cdf(bins_edges[:-1], mu, b_param)
+            )
+
+        # Ігноруємо інтервали з очікуваною частотою < 5
+        mask = expected_freq >= 5
+        if np.sum(mask) < 1:
+            result_text_2.append("Pearson χ²: Not enough valid bins (expected frequency < 5 in all bins)\n")
+            chi2_stat = np.nan
+            #p_value_chi2 = np.nan
+            df = 0
+        else:
+            chi2_stat = np.sum((observed_freq[mask] - expected_freq[mask])**2 / expected_freq[mask])
+            df = np.sum(mask) - 1 - len(estimates)
+            #p_value_chi2 = 1 - chi2.cdf(chi2_stat, df) if df > 0 else np.nan
+
+        # Колмогорів︠
+        self.ecdf_sorted_data = np.sort(dist_array)
+        # Теоретичний CDF
+        if selected_dist == "Normal":
+            theoretical_cdf = norm.cdf(self.ecdf_sorted_data, mu, sigma)
+        elif selected_dist == "Exponential":
+            theoretical_cdf = 1 - np.exp(-lam * self.ecdf_sorted_data)
+        elif selected_dist == "Uniform":
+            a, b = estimates['a'], estimates['b']
+            theoretical_cdf = np.clip((self.ecdf_sorted_data - a) / (b - a), 0, 1)
+        elif selected_dist == "Weibull":
+            theoretical_cdf = weibull_min.cdf(self.ecdf_sorted_data, alpha_value, scale=beta)
+        elif selected_dist == "Laplace":
+            theoretical_cdf = laplace.cdf(self.ecdf_sorted_data, mu, b_param)
+
+        # ECDF values
+        self.ecdf_y_ = np.arange(1, len(self.ecdf_sorted_data) + 1) / len(self.ecdf_sorted_data)
+        D_n = np.max(np.abs(self.ecdf_y_ - theoretical_cdf))
+        z = np.sqrt(n) * D_n
+
+        # Approximate Kolmogorov distribution
+        k_sum = 0
+        for k in range(1, 100):  # Обмеження до 100 членів для наближення
+            f1 = k**2 - 0.5 * (1 - (-1)**k)
+            f2 = 5*k**2 + 22 - 7.5 * (1 - (-1)**k)  # Fixed typo from earlier code
+            term1 = (-1)**(k-1) * np.exp(-2*k**2*z**2) * (1 - (2*k**2*z**2)/np.sqrt(n) - (8*k**4*z**4)/(18*n) * (f1 - 4*(f2 + 3)*k**2*z**2) + (k**2*z**2)/(2*n) * ((k**2)/5 - (4*k**2 + 45*k**2*z**2)/15))
+            k_sum += term1
+        K_z = k_sum - z**3/n**2  # Оцінка з урахуванням вищих порядків
+        p_value_kol = 1 - K_z if K_z < 1 else 0.0
+
+        # Output text
+        result_text_2.append("+--------------------------+---------------------+--------------------------+\n")
+        result_text_2.append("| Test                     | Criteria-value      | Compare-value            |\n")
+        result_text_2.append("+--------------------------+---------------------+--------------------------+\n")
+
+        # Pearson χ² output
+        if df > 0 and not np.isnan(chi2_stat):
+            critical_chi2 = chi2.ppf(1 - alpha_value, df)  # Use df instead of self.bins_amount-1 for correctness
+            result_text_2.append(f"| Pearson χ²               | {chi2_stat:>19.4f} | {critical_chi2:>24.4f} |\n")
+        else:
+            result_text_2.append(f"| Pearson χ²               | {'Invalid':>19} | {'-':>24} |\n")
+
+        # Kolmogorov output
+        result_text_2.append(f"| Kolmogorov               | {p_value_kol:>19.4f} | {alpha_value:>24.4f} |\n")
+        result_text_2.append("+--------------------------+---------------------+--------------------------+\n")
+
+        # Decision logic (optional, based on critical value comparison)
+        if df > 0 and not np.isnan(chi2_stat):
+            chi2_decision = "Accept" if chi2_stat <= critical_chi2 else "Reject"
+            result_text_2.append(f"\nPearson χ² test (χ² = {chi2_stat:.4f} {'≤' if chi2_decision == 'Accept' else '>'} critical = {critical_chi2:.4f}): {chi2_decision} H0 (data {'consistent with' if chi2_decision == 'Accept' else 'does not fit'} {selected_dist} distribution)\n")
+        else:
+            result_text_2.append(f"\nPearson χ² test: Invalid (insufficient valid bins or df ≤ 0)\n")
+
+        kolm_decision = "Accept" if p_value_kol > alpha_value else "Reject"
+        result_text_2.append(f"Kolmogorov test (p = {p_value_kol:.4f} {'>' if kolm_decision == 'Accept' else '≤'} α = {alpha_value:.4f}): {kolm_decision} H0 (data {'consistent with' if kolm_decision == 'Accept' else 'does not fit'} {selected_dist} distribution)\n")
+
+        # Combined decision (optional)
+        if df > 0 and not np.isnan(chi2_stat):
+            overall_decision = "Accept" if (chi2_stat <= critical_chi2 and p_value_kol > alpha) else "Reject"
+            result_text_2.append(f"Overall (α = {alpha_value:.2f}): {overall_decision} H0 (data {'consistent with' if overall_decision == 'Accept' else 'does not fit'} {selected_dist} distribution)\n")
+        else:
+            result_text_2.append(f"Overall (α = {alpha_value:.2f}): Relying on Kolmogorov test only - {kolm_decision} H0\n")
+
+        self.kolm_pearson_output.setPlainText(''.join(result_text_2))
+
+
     def _update_analysis(self):
         if self.processed_data is None:
             self._clear_plots_and_stats()
@@ -915,32 +1427,32 @@ class StatisticalApplication(QMainWindow):
                 self.statistics_output.setPlainText("No data available for analysis after preprocessing.")
                 return
 
-            bins_amount = 0
+            self.bins_amount = 0
             if self.rd_custom.isChecked():
                 try:
                     bins_str = self.custom_entry.text().strip()
                     if bins_str:
-                        bins_amount = int(bins_str)
-                        if bins_amount <= 0:
+                        self.bins_amount = int(bins_str)
+                        if self.bins_amount <= 0:
                             raise ValueError("Number of intervals must be positive.")
                 except ValueError as e:
                     QMessageBox.warning(self, "Invalid Input",
                                         f"Invalid number of intervals: {e}. Choosing automatically.")
-                    bins_amount = 0
+                    self.bins_amount = 0
                     self.rd_default.setChecked(True)
 
-            hist_info = midpoint_intervals_forming(current_data, bins=bins_amount)
-            self.intervals_array = hist_info['intervals_array']
-            delta_h = float(hist_info['delta_h'])
-            bins_amount = hist_info["bins_amount"]
+            self.hist_info = midpoint_intervals_forming(current_data, bins=self.bins_amount)
+            self.intervals_array = self.hist_info['intervals_array']
+            delta_h = float(self.hist_info['delta_h'])
+            self.bins_amount = self.hist_info["bins_amount"]
 
-            frequencies_array = frequencies(current_data, delta_h, bins_amount)
-            relative_frequencies_array = relative_frequencies(frequencies_array, len(current_data))
+            self.frequencies_array = frequencies(current_data, delta_h, self.bins_amount)
+            relative_frequencies_array = relative_frequencies(self.frequencies_array, len(current_data))
             x_axis_ecdf, y_axis_ecdf = ecdf(current_data)
 
             print(f"intervals_array size: {len(self.intervals_array)}")
             print(f"relative_frequencies_array size: {len(relative_frequencies_array)}")
-            print(f"frequencies_array size: {len(frequencies_array)}")
+            print(f"frequencies_array size: {len(self.frequencies_array)}")
             assert len(self.intervals_array) == len(relative_frequencies_array), "Array size mismatch!"
 
             self._plot_histogram(self.intervals_array, relative_frequencies_array, delta_h)
@@ -1016,6 +1528,34 @@ class StatisticalApplication(QMainWindow):
         scatter = pg.ScatterPlotItem(x=x_axis, y=y_axis, size=2, brush='blue')
         self.ecdf_widget.addItem(scatter)
 
+        self.ecdf_widget.autoRange()
+    
+    def _plot_ecdf_theor(self, x_axis, y_axis, alpha):
+        self.ecdf_widget.clear()
+        if x_axis is None or y_axis is None or len(x_axis) == 0 or len(y_axis) == 0:
+            self.ecdf_widget.setTitle("ECDF (no data)")
+            return
+
+        n = len(x_axis)
+        z_alpha = norm.ppf(1 - alpha / 2)  # Dynamic z-value based on alpha
+        margin = z_alpha / np.sqrt(n)
+        lower = np.clip(np.array(y_axis) - margin, 0, 1)
+        upper = np.clip(np.array(y_axis) + margin, 0, 1)
+
+        ecdf_item = pg.PlotCurveItem(
+            x=x_axis,
+            y=y_axis,
+            pen=pg.mkPen('blue', width=0.5)
+        )
+        scatter = pg.ScatterPlotItem(x=x_axis, y=y_axis, size=2, brush='red')
+
+        lower_curve = pg.PlotCurveItem(x=x_axis, y=lower, pen=pg.mkPen('yellow'))
+        upper_curve = pg.PlotCurveItem(x=x_axis, y=upper, pen=pg.mkPen('yellow'))
+
+        self.ecdf_widget.addItem(ecdf_item)
+        self.ecdf_widget.addItem(scatter)
+        self.ecdf_widget.addItem(lower_curve)
+        self.ecdf_widget.addItem(upper_curve)
         self.ecdf_widget.autoRange()
 
 

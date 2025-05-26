@@ -1136,8 +1136,7 @@ class StatisticalApplication(QMainWindow):
         self.ecdf_sorted_data = sorted(dist_array)
         self.ecdf_y_ = [i / n for i in range(1, n + 1)]
         self._load_data(external_data=dist_array)
-        self._plot_ecdf_theor(self.ecdf_sorted_data, self.ecdf_y_, alpha_value)
-
+        self._plot_ecdf_theor(dist_name, estimates, se_estimates, alpha_value, n, dist_array)
         # Pearson Chi² test
         delta_h = float(self.hist_info["delta_h"])
         minimum = min(dist_array)
@@ -1165,7 +1164,7 @@ class StatisticalApplication(QMainWindow):
         except:
             expected_freq = np.zeros_like(observed_freq)
 
-        mask = expected_freq >= 5
+        """ mask = expected_freq >= 5
         chi2_stat = np.nan
         if np.sum(mask) > 0:
             chi2_stat = np.sum((observed_freq[mask] - expected_freq[mask])**2 / expected_freq[mask])
@@ -1174,6 +1173,11 @@ class StatisticalApplication(QMainWindow):
         else:
             df = 0
             critical_chi2 = np.nan
+        """
+        # ALWAYS calculate chi2, even if expected freq < 5
+        chi2_stat = np.sum((observed_freq - expected_freq)**2 / np.where(expected_freq == 0, 1e-9, expected_freq))
+        df = len(observed_freq) - 1 - len(estimates)
+        critical_chi2 = chi2.ppf(1 - alpha_value, df) if df > 0 else np.nan
 
         # Kolmogorov test
         x_sorted = np.sort(dist_array)
@@ -1433,34 +1437,78 @@ class StatisticalApplication(QMainWindow):
 
         self.ecdf_widget.autoRange()
     
-    def _plot_ecdf_theor(self, x_axis, y_axis, alpha):
-        self.ecdf_widget.clear()
-        if x_axis is None or y_axis is None or len(x_axis) == 0 or len(y_axis) == 0:
-            self.ecdf_widget.setTitle("ECDF (no data)")
+    def _plot_ecdf_theor(self, dist_name, estimates, se_estimates, alpha, n, dist_array):
+        # Do NOT clear the widget, so existing plots (histogram, empirical ECDF, discrete ECDF) remain
+        if dist_array is None or len(dist_array) == 0:
+            self.ecdf_widget.setTitle("Theoretical CDF (no data)")
             return
 
-        n = len(x_axis)
-        z_alpha = norm.ppf(1 - alpha / 2)  # Dynamic z-value based on alpha
-        margin = z_alpha / np.sqrt(n)
-        lower = np.clip(np.array(y_axis) - margin, 0, 1)
-        upper = np.clip(np.array(y_axis) + margin, 0, 1)
+        # Generate smooth x values
+        x_theor = np.linspace(min(dist_array), max(dist_array), 1000)
+        z_alpha = norm.ppf(1 - alpha / 2)  # Critical value for CI
 
-        ecdf_item = pg.PlotCurveItem(
-            x=x_axis,
-            y=y_axis,
-            pen=pg.mkPen('blue', width=0.5)
+        # Compute theoretical CDF and variance based on distribution
+        if dist_name == "Exponential":
+            lambda_hat = estimates['λ']
+            y_theor = 1 - np.exp(-lambda_hat * x_theor)
+            var_theor = (x_theor * np.exp(-lambda_hat * x_theor))**2 * (lambda_hat**2 / n)
+
+        elif dist_name == "Uniform":
+            a_hat = estimates['a']
+            b_hat = estimates['b']
+            y_theor = np.clip((x_theor - a_hat) / (b_hat - a_hat), 0, 1)
+            se = se_estimates['a']  # Using 'a' SE as a proxy
+            var_theor = np.ones_like(x_theor) * (se**2 / n)  # Crude approximation
+
+        elif dist_name == "Weibull":
+            alpha_hat = estimates['α (shape)']
+            beta_hat = estimates['β (scale)']
+            y_theor = 1 - np.exp(- (x_theor / beta_hat)**alpha_hat)
+            temp = (x_theor / beta_hat)**alpha_hat
+            partial_alpha = temp * np.log(x_theor / beta_hat + 1e-10) * np.exp(-temp)
+            partial_beta = (alpha_hat / beta_hat) * (x_theor / beta_hat)**(alpha_hat - 1) * np.exp(-temp)
+            var_theor = (partial_alpha * se_estimates['α (shape)'])**2 + (partial_beta * se_estimates['β (scale)'])**2
+
+        elif dist_name == "Normal":
+            mu_hat = estimates['μ']
+            sigma_hat = estimates['σ']
+            z = (x_theor - mu_hat) / sigma_hat
+            y_theor = norm.cdf(z)
+            phi_z = norm.pdf(z)
+            var_theor = (phi_z**2) * (1 / n + (z**2) / (2 * n))
+
+        elif dist_name == "Laplace":
+            mu_hat = estimates['μ']
+            b_hat = estimates['b']
+            y_theor = 0.5 + 0.5 * np.sign(x_theor - mu_hat) * (1 - np.exp(-np.abs(x_theor - mu_hat) / b_hat))
+            diff = np.abs(x_theor - mu_hat)
+            partial_b = (diff / (b_hat**2)) * np.exp(-diff / b_hat) * (0.5 * np.sign(x_theor - mu_hat))
+            var_theor = (partial_b * se_estimates['b'])**2
+
+        else:
+            self.ecdf_widget.setTitle("Unsupported Distribution")
+            return
+
+        # Compute CI bounds
+        lower = np.clip(y_theor - z_alpha * np.sqrt(var_theor), 0, 1)
+        upper = np.clip(y_theor + z_alpha * np.sqrt(var_theor), 0, 1)
+
+        # Plot smooth theoretical CDF and CI curves on top of existing plots
+        ecdf_theor_item = pg.PlotCurveItem(
+            x=x_theor, y=y_theor, pen=pg.mkPen('blue', width=2)
         )
-        scatter = pg.ScatterPlotItem(x=x_axis, y=y_axis, size=2, brush='red')
+        lower_curve = pg.PlotCurveItem(
+            x=x_theor, y=lower, pen=pg.mkPen('red', style=Qt.PenStyle.DashLine)
+        )
+        upper_curve = pg.PlotCurveItem(
+            x=x_theor, y=upper, pen=pg.mkPen('red', style=Qt.PenStyle.DashLine)
+        )
 
-        lower_curve = pg.PlotCurveItem(x=x_axis, y=lower, pen=pg.mkPen('red'))
-        upper_curve = pg.PlotCurveItem(x=x_axis, y=upper, pen=pg.mkPen('red'))
-
-        self.ecdf_widget.addItem(ecdf_item)
-        self.ecdf_widget.addItem(scatter)
+        self.ecdf_widget.addItem(ecdf_theor_item)
         self.ecdf_widget.addItem(lower_curve)
         self.ecdf_widget.addItem(upper_curve)
+        self.ecdf_widget.setTitle(f"Empirical and Theoretical CDF ({dist_name}) with {1-alpha:.2%} CI")
         self.ecdf_widget.autoRange()
-
 
     def _plot_discrete_ecdf(self, intervals_array, relative_frequencies_array, delta_h):
         """

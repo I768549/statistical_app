@@ -884,6 +884,7 @@ class StatisticalApplication(QMainWindow):
                     estimated_lambdas.append(estimated_lambda)
                     # H₀: μ = 1/λ
                     true_mean = 1.0 / true_param_value
+                    #t_stat = (true_param_value - estimated_lambda) / (estimated_lambda / math.sqrt(sample_size))
                     t_stat = (sample_mean - true_mean) / (sample_std / math.sqrt(sample_size))
                     estimated_t_statistics.append(t_stat)
 
@@ -1051,8 +1052,11 @@ class StatisticalApplication(QMainWindow):
             QMessageBox.warning(self, "Invalid Input", "Please enter a valid alpha in (0, 1)")
             return
 
-        # Override alpha if small sample size
-        alpha_value = 0.05 if n > 30 else 0.3
+        # Set alpha based on user input and sample size
+        if alpha != 0.05:  # If user specifies anything other than 0.05
+            alpha_value = 0.3 if n < 30 else 0.05
+        else:
+            alpha_value = alpha  # Use user-specified alpha (0.05)
         z_alpha = norm.ppf(1 - alpha_value / 2)
 
         dist_name = self.falling_list_1.currentText()
@@ -1181,7 +1185,7 @@ class StatisticalApplication(QMainWindow):
             a, b = estimates['a'], estimates['b']
             theoretical_cdf = np.clip((x_sorted - a) / (b - a), 0, 1)
         elif dist_name == "Weibull":
-            theoretical_cdf = weibull_min.cdf(x_sorted, alpha_value, scale=beta)
+            theoretical_cdf = weibull_min.cdf(x_sorted, alpha_w, scale=beta)
         elif dist_name == "Laplace":
             theoretical_cdf = laplace.cdf(x_sorted, mu, b)
 
@@ -1220,8 +1224,6 @@ class StatisticalApplication(QMainWindow):
             results.append(f"Overall (α = {alpha_value:.2f}): Based on Kolmogorov only - {kolmogorov_decision} H0\n")
 
         self.kolm_pearson_output.setPlainText(''.join(results))
-
-
 
     def _update_analysis(self):
         if self.processed_data is None:
@@ -1450,8 +1452,8 @@ class StatisticalApplication(QMainWindow):
         )
         scatter = pg.ScatterPlotItem(x=x_axis, y=y_axis, size=2, brush='red')
 
-        lower_curve = pg.PlotCurveItem(x=x_axis, y=lower, pen=pg.mkPen('yellow'))
-        upper_curve = pg.PlotCurveItem(x=x_axis, y=upper, pen=pg.mkPen('yellow'))
+        lower_curve = pg.PlotCurveItem(x=x_axis, y=lower, pen=pg.mkPen('red'))
+        upper_curve = pg.PlotCurveItem(x=x_axis, y=upper, pen=pg.mkPen('red'))
 
         self.ecdf_widget.addItem(ecdf_item)
         self.ecdf_widget.addItem(scatter)

@@ -1,7 +1,6 @@
 import sys
 import numpy as np
-from scipy.stats import t
-from scipy.stats import norm, weibull_min, laplace, chi2
+from scipy.stats import norm, weibull_min, laplace, chi2, f, t
 
 
 import math
@@ -17,6 +16,8 @@ from PyQt6.QtGui import QIcon, QFontDatabase, QDoubleValidator, QIntValidator
 
 from main_functions import *
 from dist_generation import *
+from criterias import *
+
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
@@ -441,12 +442,12 @@ class StatisticalApplication(QMainWindow):
 
         # Section: Two-sample analysis options
         two_sample_section_label = QLabel("Two-sample options:")
-        note_1 = QLabel("Note: Suitable for normal-like distributions.")
+        #note_1 = QLabel("Note: Suitable for normal-like distributions.")
         self.choosing_layout.addWidget(two_sample_section_label)
-        self.choosing_layout.addWidget(note_1)
+        #self.choosing_layout.addWidget(note_1)
 
         two_sample_checkboxes = QVBoxLayout()
-        self.two_disp_mean_compare = QCheckBox("Compare dispersion and mean")
+        self.two_disp_mean_compare = QCheckBox("Compare dispersions and means. !Note: Suitable for normal-like distributions only!")
         self.two_disp_mean_criterias = QCheckBox("Perform criterias")
         self.perform_button_one = QPushButton("Perform")
         self.perform_button_one.setEnabled(False)
@@ -481,12 +482,10 @@ class StatisticalApplication(QMainWindow):
 
         self.output_1_dist_text = QTextEdit()
         self.output_1_dist_text.setReadOnly(True)
-        self.output_1_dist_text.setPlainText("Two samples test results:")
         self.output_dist_layout.addWidget(self.output_1_dist_text)
 
         self.output_2_dist_text = QTextEdit()
         self.output_2_dist_text.setReadOnly(True)
-        self.output_2_dist_text.setPlainText("Many samples test results:")
         self.output_dist_layout.addWidget(self.output_2_dist_text)
 
         # Add output layout to the main homogeneity layout (right side)
@@ -1270,8 +1269,110 @@ class StatisticalApplication(QMainWindow):
             #QMessageBox.information(self, "Result", f"Processing completed!\n{result}")
         else: 
             print("fuck me")
-    def process_files_one(self, first, second):
-        print("isn't implemented yet")
+    def process_files_one(self, first_str, second_str):
+        #checking disperrsion and mean for !!!normal distributions!!!
+        first = [float(element) for element in first_str.split()]
+        second = [float(element) for element in second_str.split()]
+        size_first = len(first)
+        size_second = len(second)
+        if size_first < 60 or size_second < 60:
+            alpha = 0.2
+        else:
+            alpha = 0.05
+
+        results = []
+        if self.two_disp_mean_compare.isChecked():
+            results.append("--- PARAMETRIC TESTS (normal data)---")
+            #first distr
+            first_mean = arithmetic_mean(first)
+            var_1 = unbiased_sample_variance(first, first_mean)
+            #second distr
+            second_mean = arithmetic_mean(second)
+            var_2 = unbiased_sample_variance(second, second_mean)
+            #check disperssion first
+            results.append(f"Check disspersions first.\nComparing {var_1:.4f} and {var_2:.4f}.")
+            if var_1 >= var_2:
+                f_stat = var_1 / var_2
+                dfn, dfd = size_first - 1, size_second - 1
+            else:
+                f_stat = var_2 / var_1
+                dfn, dfd = size_second - 1, size_first - 1
+            #critical values
+            f_critical = f.ppf(1 - alpha, dfn, dfd)
+            results.append(f"f statistics value is {f_stat:.4f} f critical value is {f_critical:.4f}")
+            if f_stat <= f_critical:
+                results.append(f"{f_stat:.4f} <= {f_critical:.4f} => H0+ (dispersions are the same)")
+                results.append(f"Comparing means {first_mean:.4f} and {second_mean:.4f}")
+
+                if size_first + size_second > 25:
+                    S_2 = var_1/size_first + var_2/size_second
+                    t_stat_mean_comparing = (first_mean - second_mean)/math.sqrt(S_2)
+                else:
+                    pooled_var = ((size_first - 1) * var_1 + (size_second - 1) * var_2) / (size_first + size_second - 2)
+                    S_2 = pooled_var * (1/size_first + 1/size_second)
+                    multiply = math.sqrt((size_first*size_second)/(size_first + size_second))
+                    t_stat_mean_comparing = ((first_mean - second_mean)/math.sqrt(S_2)) * multiply
+                #critical value
+                t_critical_mean_comparing = t.ppf(1 - alpha/2, size_first + size_second - 2)
+                results.append(f"t statistics value is {t_stat_mean_comparing:.4f} t critical value is {t_critical_mean_comparing:.4f}")
+                if abs(t_stat_mean_comparing) <= t_critical_mean_comparing:
+                    results.append(f"|{t_stat_mean_comparing:.4f}| <= {t_critical_mean_comparing:.4f} => H0 + (means are the same)")
+                else:
+                    results.append(f"|{t_stat_mean_comparing:.4f}| > {t_critical_mean_comparing:.4f} => H0 - (means are not the same)")
+            else:
+                results.append("H0 - (dispersions are not the same) => comparing means has no sense")
+        if  self.two_disp_mean_criterias.isChecked():
+            results.append("\n--- NON-PARAMETRIC TESTS ---")
+            #Wilcoxon criteria
+            results.append("Wilcoxon test:")
+            try:
+                w_statistics = wilcoxon_w(first, second)
+                w_critical_value = norm.ppf(1 - alpha/2)
+                results.append(f"Comparing w statistics {w_statistics:.4f} and u critical value {w_critical_value:.4f}")
+                if abs(w_statistics) <= w_critical_value:
+                    results.append(f"|{w_statistics:.4f}| <= {w_critical_value:.4f} => H0 +")
+                else:
+                    results.append(f"|{w_statistics:.4f}| > {w_critical_value:.4f} => H0 -")
+            
+            except Exception as e:
+                results.append(f"Error in Wilcoxon test: {e}")
+            #Mann-Whitney criteria
+            results.append("Mann-Whitney test:")
+            try:
+                u_statistics = mann_whitney_u(first, second)
+                u_critical_value = norm.ppf(1 - alpha/2)
+                results.append(f"Comparing u {u_statistics:.4f} and u critical value {u_critical_value:.4f}")
+                if abs(u_statistics) <= u_critical_value:
+                    results.append(f"|{u_statistics:.4f}| <= {u_critical_value:.4f} => H0 +")
+                else:
+                    results.append(f"|{u_statistics:.4f}| > {u_critical_value:.4f} => H0 -")
+        
+            except Exception as e:
+                results.append(f"Error in Mann-Whitney test: (str{e})")
+            #Sign test
+            results.append("Sign test:")
+            try:
+                if len(first) != len(second):
+                    results.append("Sign test requires paired data - skipping")
+                else:
+                    s_statistics, pos_size = sign_test(first, second)
+                    if pos_size > 15:
+                        s_critical_value = norm.ppf(1 - alpha/2)
+                        results.append(f"Comparing S statistics {s_statistics:.4f} and u critical value {s_critical_value:.4f}")
+                        if abs(s_statistics) < s_critical_value:
+                            results.append(f"|{s_statistics:.4f}| < {s_critical_value:.4f} => H0 +")
+                        else:
+                            results.append(f"|{s_statistics:.4f}| >= {s_critical_value:.4f} => H0 -")
+                    else:
+                        s_critical_value = alpha
+                        results.append(f"Comparing a0 {s_statistics:.4f} and critical value a {s_critical_value:.4f}")
+                        if s_statistics >= s_critical_value:
+                            results.append(f"{s_statistics:.4f} >= {s_critical_value:.4f} => H0 +")
+                        else:
+                            results.append(f"{s_statistics:.4f} < {s_critical_value:.4f} => H0 -")
+            except Exception as e:
+                results.append(f"Error in Sign test: {e}")            
+        self.output_1_dist_text.setPlainText('\n'.join(results))
 
     def _lab4_one(self):
         print("Isn't implemented yes")

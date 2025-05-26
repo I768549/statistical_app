@@ -449,6 +449,7 @@ class StatisticalApplication(QMainWindow):
         self.two_disp_mean_compare = QCheckBox("Compare dispersion and mean")
         self.two_disp_mean_criterias = QCheckBox("Perform criterias")
         self.perform_button_one = QPushButton("Perform")
+        self.perform_button_one.setEnabled(False)
         two_sample_checkboxes.addWidget(self.two_disp_mean_compare)
         two_sample_checkboxes.addWidget(self.two_disp_mean_criterias)
         self.choosing_layout.addLayout(two_sample_checkboxes)
@@ -640,8 +641,13 @@ class StatisticalApplication(QMainWindow):
         self.apply_standartization_button.clicked.connect(self._standartise_data)
         self.generate_distribution_push_button.clicked.connect(self._generate_distribution)
         self.generate_distribution_push_button_1.clicked.connect(self._perform_lab2)
-
         self.reset_data_button.clicked.connect(self._reset_data)
+        # lab4 
+        #self.perform_button_one.clicked.connect(lambda: self._load_distr(2))
+        self.choose_1_dist.clicked.connect(lambda: self._load_distr(1))
+        self.choose_2_dist.clicked.connect(lambda: self._load_distr(2))
+        self.perform_button_one.clicked.connect(self._perform_action_one)
+
         self.falling_list.currentTextChanged.connect(self._update_ui_state)
         self.falling_list_1.currentTextChanged.connect(self._update_ui_state)
 
@@ -1228,6 +1234,49 @@ class StatisticalApplication(QMainWindow):
             results.append(f"Overall (α = {alpha_value:.2f}): Based on Kolmogorov only - {kolmogorov_decision} H0\n")
 
         self.kolm_pearson_output.setPlainText(''.join(results))
+
+    def _load_distr(self, distr_number):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "Select a file with distribution data",
+            "", 
+            "Text files (*.txt);;Data files (*.dat);;All files (*)"
+        )
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                if distr_number == 1:
+                    self.file1_content = content
+                    self.file1_path = file_path
+                    self.file_dist_status_1.setText(f"File 1: {file_path.split('/')[-1]}")
+                else:
+                    self.file2_content = content
+                    self.file2_path = file_path
+                    self.file_dist_status_2.setText(f"File 2: {file_path.split('/')[-1]}")
+                
+                # Enable perform button if both files are loaded
+                if self.file1_content and self.file2_content:
+                    self.perform_button_one.setEnabled(True)
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Could not load file: {str(e)}")        
+    def _perform_action_one(self):
+        if self.file1_content and self.file2_content:
+            # Call your function here
+            result = self.process_files_one(self.file1_content, self.file2_content)
+            
+            #QMessageBox.information(self, "Result", f"Processing completed!\n{result}")
+        else: 
+            print("fuck me")
+    def process_files_one(self, first, second):
+        print("isn't implemented yet")
+
+    def _lab4_one(self):
+        print("Isn't implemented yes")
+    def _lab4_two(self):
+        print("Isn't implemented yes")
 
     def _update_analysis(self):
         if self.processed_data is None:

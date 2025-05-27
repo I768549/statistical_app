@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from scipy.stats import norm, weibull_min, laplace, chi2, f, t
+from scipy.stats import norm, weibull_min, laplace, chi2, f, t, gaussian_kde
 
 
 import math
@@ -1579,10 +1579,12 @@ class StatisticalApplication(QMainWindow):
         if not intervals_array or not relative_frequencies_array:
             self.histogram_widget.setTitle("Histogram of Relative Frequencies (no data)")
             return
-
+        
         bar_width = delta_h
-        if bar_width <= 0: bar_width = 1.0
-
+        if bar_width <= 0: 
+            bar_width = 1.0
+        
+        # Plot histogram bars
         histogram_item = pg.BarGraphItem(
             x=intervals_array,
             height=relative_frequencies_array,
@@ -1591,16 +1593,49 @@ class StatisticalApplication(QMainWindow):
             pen=pg.mkPen('k', width=0.2)
         )
         self.histogram_widget.addItem(histogram_item)
-         #Set y-axis range based on max bin height
+        
+        # Generate smooth density curve
+        if len(intervals_array) > 1:
+            # Create data points weighted by frequencies for KDE
+            data_points = []
+            for x, freq in zip(intervals_array, relative_frequencies_array):
+                # Add points proportional to frequency (multiply by large number for better sampling)
+                n_points = max(1, int(freq * 1000))
+                data_points.extend([x] * n_points)
+            
+            if len(data_points) > 1:
+                # Kernel Density Estimation
+                kde = gaussian_kde(data_points)
+                
+                # Generate smooth x values for the curve
+                x_min, x_max = min(intervals_array), max(intervals_array)
+                x_smooth = np.linspace(x_min - bar_width, x_max + bar_width, 200)
+                
+                # Calculate density values
+                density_values = kde(x_smooth)
+                
+                # Scale density to match histogram scale (approximate)
+                # This assumes your relative_frequencies represent density values
+                scale_factor = max(relative_frequencies_array) / max(density_values) if max(density_values) > 0 else 1
+                density_values *= scale_factor
+                
+                # Plot the smooth curve
+                curve_item = pg.PlotCurveItem(
+                    x=x_smooth, 
+                    y=density_values,
+                    pen=pg.mkPen('red', width=2)
+                )
+                self.histogram_widget.addItem(curve_item)
+        
+        # Set y-axis range based on max bin height
         max_height = max(relative_frequencies_array) if relative_frequencies_array else 1.0
-        self.histogram_widget.setYRange(0, max_height * 1.1)  # Add 10% padding on top
+        self.histogram_widget.setYRange(0, max_height * 1.1)
         
         # Set x-axis range if needed
         if intervals_array:
             min_x = min(intervals_array) - bar_width/2
             max_x = max(intervals_array) + bar_width/2
             self.histogram_widget.setXRange(min_x, max_x)
-
 
     def _plot_ecdf(self, x_axis, y_axis):
         self.ecdf_widget.clear()

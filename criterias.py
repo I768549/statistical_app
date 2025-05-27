@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from main_functions import *
 def rank_data(sample1, sample2):
     combined = [(x,1) for x in sample1] + [(y,2) for y in sample2]
     combined.sort(key=lambda x: x[0])
@@ -80,56 +81,43 @@ def sign_test(first, second):
         result = (1 / (2 ** N)) * total
         return result, n
 
+def mid_rank_diff_criteria(sample1, sample2):
+    first = np.array(sample1)
+    second = np.array(sample2)
+    size_one = len(first)
+    size_two = len(second)
+    N = size_one + size_two
+    ranks = rank_data(first, second)
 
-"""
-import numpy as np
-from scipy.stats import norm
+    rank_sum1 = sum(rank for rank, group in ranks if group == 1)
+    rank_sum2 = sum(rank for rank, group in ranks if group == 2)
 
-def wilcoxon_signed_rank(sample1, sample2):
-    if len(sample1) != len(sample2):
-        raise ValueError("Samples must be of equal length for Wilcoxon signed-rank test.")
-    
-    # Compute differences
-    differences = [x - y for x, y in zip(sample1, sample2)]
-    
-    # Remove zero differences and keep track of original indices
-    nonzero_diffs = [(d, i) for i, d in enumerate(differences) if d != 0]
-    if not nonzero_diffs:
-        return 0  # If all differences are zero, return a neutral statistic
-    
-    # Rank absolute differences
-    abs_diffs = sorted([(abs(d), i) for d, i in nonzero_diffs])
-    ranks = []
-    i = 0
-    while i < len(abs_diffs):
-        same_value = [abs_diffs[i]]
-        j = i + 1
-        while j < len(abs_diffs) and abs_diffs[j][0] == abs_diffs[i][0]:
-            same_value.append(abs_diffs[j])
-            j += 1
-        avg_rank = sum(range(i + 1, j + 1)) / len(same_value)  # Average rank for ties
-        for value in same_value:
-            ranks.append((avg_rank, value[1]))
-        i = j
-    
-    # Assign signs to ranks
-    signed_ranks = []
-    for rank, idx in ranks:
-        original_diff = differences[nonzero_diffs[idx][1]]
-        sign = 1 if original_diff > 0 else -1
-        signed_ranks.append(sign * rank)
-    
-    # Compute W+ (sum of positive ranks) and W- (sum of negative ranks)
-    W_plus = sum(r for r in signed_ranks if r > 0)
-    W_minus = -sum(r for r in signed_ranks if r < 0)
-    W = min(W_plus, W_minus)
-    
-    # Compute z-statistic for large samples
-    n = len(nonzero_diffs)
-    mean_W = n * (n + 1) / 4
-    var_W = n * (n + 1) * (2 * n + 1) / 24
-    z_stat = (W - mean_W) / np.sqrt(var_W)
-    
-    return z_stat
+    rx_mean = rank_sum1/size_one
+    ry_mean = rank_sum2/size_two
 
-"""
+    denominator = N * math.sqrt((N+1)/(12*size_one*size_two))
+
+    v_stat = (rx_mean - ry_mean)/denominator
+    return v_stat
+
+def abbe_independence_criteria(sample):
+    results = []
+    results.append("Abbe criteria (Independence check) for the entered distribution:")
+    first = np.array(sample)
+    N = len(first)
+    
+    if N < 2:
+        raise ValueError("Sample size must be at least 2 for Abbe criterion")
+
+    mean_first = arithmetic_mean(first)
+    S2 = unbiased_sample_variance(first, mean_first)
+
+    squared_diff_sum = np.sum((first[1:] - first[:-1])**2)
+    d2 = squared_diff_sum / (N - 1)
+    q = d2 / (2 * S2)
+    
+    E_q = 1 
+    D_q = (N - 2) / (N^2 - 1)
+    
+    U = (q - 1) * np.sqrt((N**2 - 1) / (N - 2))
+    return U

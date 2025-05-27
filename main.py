@@ -1169,16 +1169,6 @@ class StatisticalApplication(QMainWindow):
         except:
             expected_freq = np.zeros_like(observed_freq)
 
-        """ mask = expected_freq >= 5
-        chi2_stat = np.nan
-        if np.sum(mask) > 0:
-            chi2_stat = np.sum((observed_freq[mask] - expected_freq[mask])**2 / expected_freq[mask])
-            df = np.sum(mask) - 1 - len(estimates)
-            critical_chi2 = chi2.ppf(1 - alpha_value, df) if df > 0 else np.nan
-        else:
-            df = 0
-            critical_chi2 = np.nan
-        """
         # ALWAYS calculate chi2, even if expected freq < 5
         chi2_stat = np.sum((observed_freq - expected_freq)**2 / np.where(expected_freq == 0, 1e-9, expected_freq))
         df = len(observed_freq) - 1 - len(estimates)
@@ -1371,7 +1361,49 @@ class StatisticalApplication(QMainWindow):
                         else:
                             results.append(f"{s_statistics:.4f} < {s_critical_value:.4f} => H0 -")
             except Exception as e:
-                results.append(f"Error in Sign test: {e}")            
+                results.append(f"Error in Sign test: {e}") 
+            #mid_rank_diff_criteria
+            results.append("Mid rank diff criteria:")
+            try:
+                v_statistics = mid_rank_diff_criteria(first, second)
+                u_critical_value = norm.ppf(1 - alpha/2)
+                results.append(f"Comparing v {v_statistics:.4f} and u critical value {u_critical_value:.4f}")
+                if abs(v_statistics) <= u_critical_value:
+                    results.append(f"|{v_statistics:.4f}| <= {u_critical_value:.4f} => H0 +")
+                else:
+                    results.append(f"|{v_statistics:.4f}| > {u_critical_value:.4f} => H0 -")
+            except Exception as e:
+                results.append(f"Error in Mid rank diff criteria: {e}") 
+            """
+            #mid rank diff criteria
+            results.append("Mid rank difference test:")
+            try:
+                v_statistics = mid_rank_diff_criteria(first, second)
+                s_critical_value = norm.ppf(1 - alpha/2)
+                results.append(f"Comparing v statistics {v_statistics:.4f} and u critical value {s_critical_value:.4f}")
+                if abs(v_statistics) <= s_critical_value:
+                    results.append(f"|{v_statistics:.4f}| <= {s_critical_value:.4f} => H0 +")
+                else:
+                    results.append(f"|{v_statistics:.4f}| > {s_critical_value:.4f} => H0 -")
+            except Exception as e:
+                results.append(f"Error in Mid rank test: {e}")
+            """        
+            results.append("Abbe criteria (Independence check) for the first entered distribution:")
+            try:
+                # Calculate P-value using norm.cdf
+                U = abbe_independence_criteria(first)
+                P = 2 * (1 - norm.cdf(abs(U)))
+                results.append(f"Comparing P value {P:.4f} and critical value a {alpha:.4f}")
+                if P > alpha:
+                    results.append(f"P={P:.4f} > {alpha} => H0 + (Data appears independent)")
+                else:
+                    results.append(f"P={P:.4f} <= {alpha} => H0 - (Data appears dependent)")
+                    
+            except Exception as e:
+                results.append(f"Error in Abbe criterion: {str(e)}")
+          
+            
+
         self.output_1_dist_text.setPlainText('\n'.join(results))
 
     def _lab4_one(self):

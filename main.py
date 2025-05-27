@@ -788,7 +788,6 @@ class StatisticalApplication(QMainWindow):
             self.mean2_line_1.show()
 
     def _load_data(self, external_data=None):
-        print(f"DEBUG: _load_data called with external_data={external_data}, type={type(external_data)}")
         if external_data is not None:
             try:
                 # Make sure external_data is a list or array that supports copy
@@ -1539,9 +1538,6 @@ class StatisticalApplication(QMainWindow):
             relative_frequencies_array = relative_frequencies(self.frequencies_array, len(current_data))
             x_axis_ecdf, y_axis_ecdf = ecdf(current_data)
 
-            print(f"intervals_array size: {len(self.intervals_array)}")
-            print(f"relative_frequencies_array size: {len(relative_frequencies_array)}")
-            print(f"frequencies_array size: {len(self.frequencies_array)}")
             assert len(self.intervals_array) == len(relative_frequencies_array), "Array size mismatch!"
 
             self._plot_histogram(self.intervals_array, relative_frequencies_array, delta_h)
@@ -1724,7 +1720,6 @@ class StatisticalApplication(QMainWindow):
         self.ecdf_widget.addItem(ecdf_theor_item)
         self.ecdf_widget.addItem(lower_curve)
         self.ecdf_widget.addItem(upper_curve)
-        self.ecdf_widget.setTitle(f"Empirical and Theoretical CDF ({dist_name}) with {1-alpha:.2%} CI")
         self.ecdf_widget.autoRange()
 
     def _plot_discrete_ecdf(self, intervals_array, relative_frequencies_array, delta_h):

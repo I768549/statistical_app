@@ -1173,25 +1173,23 @@ class StatisticalApplication(QMainWindow):
         df = len(observed_freq) - 1 - len(estimates)
         critical_chi2 = chi2.ppf(1 - alpha_value, df) if df > 0 else np.nan
 
-        # Kolmogorov test
         x_sorted = np.sort(dist_array)
+
         if dist_name == "Normal":
-            theoretical_cdf = norm.cdf(x_sorted, mu, sigma)
+            theoretical_cdf = lambda x: norm.cdf(x, mu, sigma)
         elif dist_name == "Exponential":
-            theoretical_cdf = 1 - np.exp(-lam * x_sorted)
+            theoretical_cdf = lambda x: 1 - np.exp(-lam * x)
         elif dist_name == "Uniform":
             a, b = estimates['a'], estimates['b']
-            theoretical_cdf = np.clip((x_sorted - a) / (b - a), 0, 1)
+            theoretical_cdf = lambda x: np.clip((x - a) / (b - a), 0, 1)
         elif dist_name == "Weibull":
-            theoretical_cdf = weibull_min.cdf(x_sorted, alpha_w, scale=beta)
+            theoretical_cdf = lambda x: weibull_min.cdf(x, alpha_w, scale=beta)
         elif dist_name == "Laplace":
-            theoretical_cdf = laplace.cdf(x_sorted, mu, b)
+            theoretical_cdf = lambda x: laplace.cdf(x, mu, b)
 
         empirical_cdf = np.arange(1, n + 1) / n
-        D_n = np.max(np.abs(empirical_cdf - theoretical_cdf))
-        z = np.sqrt(n) * D_n
-        p_value_kol = 1 - np.exp(-2 * z**2)
-
+        answer_dict = kolmogorov_refined_test(theoretical_cdf, x_sorted, empirical_cdf)
+        p_value_kol = answer_dict["p_value"]
         # Format test results
         results = []
         results.append("+--------------------------+---------------------+--------------------------+\n")

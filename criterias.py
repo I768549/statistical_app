@@ -1,6 +1,53 @@
 import math
 import numpy as np
 from main_functions import *
+
+def kolmogorov_refined_test(theoretical_cdf, x_values, empirical_cdf):
+    n = len(x_values)
+
+    # D⁺ and D⁻
+    D_plus = np.max(empirical_cdf - theoretical_cdf(x_values))
+    D_minus = np.max(theoretical_cdf(x_values) - empirical_cdf)
+    D_n = max(D_plus, D_minus)
+
+    z = np.sqrt(n) * D_n
+
+    # Refined K(z)
+    K = 1.0
+    k_max = 50
+    for k in range(1, k_max + 1):
+        f1 = k**2 - 0.5 * (1 - (-1)**k)
+        f2 = 5 * k**2 + 22 - 7.5 * (1 - (-1)**k)
+
+        base = (-1)**k * np.exp(-2 * k**2 * z**2)
+
+        # Основна корекція (внутрішнє множення в першій дужці)
+        term_main = (
+            1
+            - (2 * k**2 * z**2) / (3 * n)
+            - (1 / (18 * n)) * ((f1 - 4 * (f1 + 3)) * k**2 * z**2 + 8 * k**4 * z**4)
+        )
+
+        # Друга корекція — виноска з правої частини формули
+        term_tail = (
+            (k**2 * z) / (27 * np.sqrt(n**3))
+            * (
+                (f2**2) / 5
+                - (4 * (f2 + 45) * k**2 * z**2) / 15
+                + 8 * k**4 * z**4
+            )
+        )
+
+        K += 2 * base * (term_main + term_tail)
+
+    p_value = 1 - K
+
+    return {
+        'D_n': D_n,
+        'z': z,
+        'p_value': p_value
+    }
+
 def rank_data(sample1, sample2):
     combined = [(x,1) for x in sample1] + [(y,2) for y in sample2]
     combined.sort(key=lambda x: x[0])

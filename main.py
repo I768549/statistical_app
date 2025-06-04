@@ -626,7 +626,7 @@ class StatisticalApplication(QMainWindow):
 
     def _connect_signals(self):
         self.file_button.clicked.connect(lambda: self._load_data(external_data=None))  
-
+        self.update_button.clicked.connect(self._update_analysis)
         self.rd_custom.toggled.connect(self.custom_entry.setEnabled)
         self.rd_del_outliers.toggled.connect(self.quantile_entry.setEnabled)
         self.rd_del_anomalies.toggled.connect(self.z_score_entry.setEnabled)
@@ -1038,6 +1038,37 @@ class StatisticalApplication(QMainWindow):
                     QMessageBox.information(self, "Success", f"Distribution saved to {file_path}")
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
+
+    from scipy.stats import norm, expon, weibull_min, laplace
+
+    def _plot_theoretical_density(self, dist_name, estimates, dist_array):
+        x_dense = np.linspace(min(dist_array), max(dist_array), 500)
+        
+        if dist_name == "Normal":
+            mu, sigma = estimates['μ'], estimates['σ']
+            y_dense = norm.pdf(x_dense, mu, sigma)
+        elif dist_name == "Exponential":
+            lam = estimates['λ']
+            y_dense = lam * np.exp(-lam * x_dense)
+        elif dist_name == "Uniform":
+            a, b = estimates['a'], estimates['b']
+            y_dense = np.where((x_dense >= a) & (x_dense <= b), 1/(b - a), 0)
+        elif dist_name == "Weibull":
+            alpha_w, beta = estimates['α (shape)'], estimates['β (scale)']
+            y_dense = weibull_min.pdf(x_dense, alpha_w, scale=beta)
+        elif dist_name == "Laplace":
+            mu, b = estimates['μ'], estimates['b']
+            y_dense = laplace.pdf(x_dense, mu, b)
+        else:
+            y_dense = np.zeros_like(x_dense)
+        
+        # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: масштабируем плотность под гистограмму
+        # Плотность * ширина_бина = относительная частота
+        delta_h = float(self.hist_info["delta_h"])
+        y_scaled = y_dense * delta_h
+        
+        self.histogram_widget.plot(x_dense, y_scaled, pen=pg.mkPen('r', width=2))
+
     def _perform_lab2(self):
         try:
             n = int(self.size_line_1.text().strip())
@@ -1056,11 +1087,8 @@ class StatisticalApplication(QMainWindow):
             QMessageBox.warning(self, "Invalid Input", "Please enter a valid alpha in (0, 1)")
             return
 
-        # Set alpha based on user input and sample size
-        if alpha != 0.05:  # If user specifies anything other than 0.05
-            alpha_value = 0.3 if n < 30 else 0.05
-        else:
-            alpha_value = alpha  # Use user-specified alpha (0.05)
+        alpha_value = 0.3 if n < 30 else 0.05
+        
         z_alpha = norm.ppf(1 - alpha_value / 2)
 
         dist_name = self.falling_list_1.currentText()
@@ -1140,7 +1168,10 @@ class StatisticalApplication(QMainWindow):
         self.ecdf_sorted_data = sorted(dist_array)
         self.ecdf_y_ = [i / n for i in range(1, n + 1)]
         self._load_data(external_data=dist_array)
+        self._plot_theoretical_density(dist_name, estimates, dist_array)
+
         self._plot_ecdf_theor(dist_name, estimates, se_estimates, alpha_value, n, dist_array)
+        
         # Pearson Chi² test
         delta_h = float(self.hist_info["delta_h"])
         minimum = min(dist_array)
@@ -1262,8 +1293,9 @@ class StatisticalApplication(QMainWindow):
         second = [float(element) for element in second_str.split()]
         size_first = len(first)
         size_second = len(second)
+
         if size_first < 60 or size_second < 60:
-            alpha = 0.2
+            alpha = 0.3
         else:
             alpha = 0.05
 
@@ -1567,7 +1599,7 @@ class StatisticalApplication(QMainWindow):
             print(traceback.format_exc())
             QMessageBox.critical(self, "Unexpected Error", f"An unexpected error occurred: {str(e)}")
             self._clear_plots_and_stats()
-
+    """
     def _plot_histogram(self, intervals_array, relative_frequencies_array, delta_h):
         self.histogram_widget.clear()
         if not intervals_array or not relative_frequencies_array:
@@ -1629,6 +1661,36 @@ class StatisticalApplication(QMainWindow):
         if intervals_array:
             min_x = min(intervals_array) - bar_width/2
             max_x = max(intervals_array) + bar_width/2
+            self.histogram_widget.setXRange(min_x, max_x)
+        """
+    def _plot_histogram(self, intervals_array, relative_frequencies_array, delta_h):
+        self.histogram_widget.clear()
+        if not intervals_array or not relative_frequencies_array:
+            self.histogram_widget.setTitle("Histogram of Relative Frequencies (no data)")
+            return
+
+        bar_width = delta_h
+        if bar_width <= 0: 
+            bar_width = 1.0
+
+        # Plot histogram bars
+        histogram_item = pg.BarGraphItem(
+            x=intervals_array,
+            height=relative_frequencies_array,
+            width=bar_width,
+            brush='cornflowerblue',
+            pen=pg.mkPen('k', width=0.2)
+        )
+        self.histogram_widget.addItem(histogram_item)
+
+        # Set y-axis range based on max bin height
+        max_height = max(relative_frequencies_array) if relative_frequencies_array else 1.0
+        self.histogram_widget.setYRange(0, max_height * 1.1)
+
+        # Set x-axis range if needed
+        if intervals_array:
+            min_x = min(intervals_array) - bar_width / 2
+            max_x = max(intervals_array) + bar_width / 2
             self.histogram_widget.setXRange(min_x, max_x)
 
     def _plot_ecdf(self, x_axis, y_axis):
@@ -1868,38 +1930,38 @@ class StatisticalApplication(QMainWindow):
             # Mean
             se_mean = intervals_dict["Standard Errors"]["SE Mean"]
             ci_mean = intervals_dict["Confidence Intervals"]["CI Mean"]
-            table_lines.append(f"| {'Mean':<20} | {se_mean:15.6f} | {ci_mean[0]:15.6f} | {mean:12.6f} | {ci_mean[1]:15.6f} |")
+            table_lines.append(f"| {'Mean':<20} | {se_mean:15.4f} | {ci_mean[0]:15.4f} | {mean:12.4f} | {ci_mean[1]:15.4f} |")
             # Variance
             se_var = intervals_dict["Standard Errors"]["SE Variance"]
             ci_var = intervals_dict["Confidence Intervals"]["CI Variance"]
-            #table_lines.append(f"| {'Unbiased Variance':<20} | {se_var:15.6f} | {ci_var[0]:15.6f} | {unbiased_var:12.6f} | {ci_var[1]:15.6f} |")
+            #table_lines.append(f"| {'Unbiased Variance':<20} | {se_var:15.4f} | {ci_var[0]:15.4f} | {unbiased_var:12.4f} | {ci_var[1]:15.4f} |")
             # Standard Deviation
             ci_std = intervals_dict["Confidence Intervals"]["CI Std Dev"]
-            table_lines.append(f"| {'Unbiased Std Dev':<20} | {se_var**(1/2):15.6f} | {ci_std[0]:15.6f} | {unbiased_std:12.6f} | {ci_std[1]:15.6f} |")
+            table_lines.append(f"| {'Unbiased Std Dev':<20} | {se_var**(1/2):15.4f} | {ci_std[0]:15.4f} | {unbiased_std:12.4f} | {ci_std[1]:15.4f} |")
 
             # Skewness
             se_asym = intervals_dict["Standard Errors"]["SE Skewness"]
             ci_asym = intervals_dict["Confidence Intervals"]["CI Skewness"]
-            table_lines.append(f"| {'Unbiased Assymetry':<20} | {se_asym:15.6f} | {ci_asym[0]:15.6f} | {unbiased_asym:12.6f} | {ci_asym[1]:15.6f} |")
+            table_lines.append(f"| {'Unbiased Assymetry':<20} | {se_asym:15.4f} | {ci_asym[0]:15.4f} | {unbiased_asym:12.4f} | {ci_asym[1]:15.4f} |")
             # Kurtosis
             se_kurt = intervals_dict["Standard Errors"]["SE Excess Kurtosis"]
             ci_kurt = intervals_dict["Confidence Intervals"]["CI Excess Kurtosis"]
-            table_lines.append(f"| {'Unbiased Excess Kurt':<20} | {se_kurt:15.6f} | {ci_kurt[0]:15.6f} | {unbiased_exc_kurt:12.6f} | {ci_kurt[1]:15.6f} |")
+            table_lines.append(f"| {'Unbiased Excess Kurt':<20} | {se_kurt:15.4f} | {ci_kurt[0]:15.4f} | {unbiased_exc_kurt:12.4f} | {ci_kurt[1]:15.4f} |")
             # Median (no SE or CI in the calculation)
-            table_lines.append(f"| {'Median':<20} | {'':<15} | {'':<15} | {median:12.6f} | {'':<15} |")
+            table_lines.append(f"| {'Median':<20} | {'':<15} | {'':<15} | {median:12.4f} | {'':<15} |")
             # Trimmed Mean (no SE or CI in the calculation)
-            table_lines.append(f"| {'Trimmed Mean (10%)':<20} | {'':<15} | {'':<15} | {trim_mean_10:12.6f} | {'':<15} |")
+            table_lines.append(f"| {'Trimmed Mean (10%)':<20} | {'':<15} | {'':<15} | {trim_mean_10:12.4f} | {'':<15} |")
 
             #Walsh Median
-            table_lines.append(f"| {'Walsh Median':<20} | {'':<15} | {'':<15} | {walsh_med:12.6f} | {'':<15} |")
+            table_lines.append(f"| {'Walsh Median':<20} | {'':<15} | {'':<15} | {walsh_med:12.4f} | {'':<15} |")
             #Counter Excess
-            table_lines.append(f"| {'Counter Excess':<20} | {'':<15} | {'':<15} | {count_kurt:12.6f} | {'':<15} |")
+            table_lines.append(f"| {'Counter Excess':<20} | {'':<15} | {'':<15} | {count_kurt:12.4f} | {'':<15} |")
 
             if mean > 10**(-3):
                 #Pearson cv
-                table_lines.append(f"| {'Pearson cv':<20} | {'':<15} | {'':<15} | {pearson_cv:12.6f} | {'':<15} |")
+                table_lines.append(f"| {'Pearson cv':<20} | {'':<15} | {'':<15} | {pearson_cv:12.4f} | {'':<15} |")
             #non_parametric_coef_of_variation
-            table_lines.append(f"| {'MAD/MED':<20} | {'':<15} | {'':<15} | {non_parametric_coef_of_variation:12.6f} | {'':<15} |")
+            table_lines.append(f"| {'MAD/MED':<20} | {'':<15} | {'':<15} | {non_parametric_coef_of_variation:12.4f} | {'':<15} |")
             # Add footer
             table_lines.append(separator)
             
@@ -1907,14 +1969,14 @@ class StatisticalApplication(QMainWindow):
             pi_single = intervals_dict["Prediction Intervals"]["PI Single Observation"]
             
             table_lines.append(f"\nPrediction Intervals (Confidence Level: {confidence_level*100:.0f}%):")
-            table_lines.append(f"Single Observation: ({pi_single[0]:.6f}, {pi_single[1]:.6f})")
+            table_lines.append(f"Single Observation: ({pi_single[0]:.4f}, {pi_single[1]:.4f})")
             
             table_lines.append(f"\nBiased statistics (just for fun)")
-            output_lines.append(f"{'Biased Variance:':<30} {biased_var: 12.6f}")
-            output_lines.append(f"{'Biased Std Dev:':<30} {biased_std: 12.6f}")
-            output_lines.append(f"{'Biased Asymmetry:':<30} {biased_asym: 12.6f}")
+            output_lines.append(f"{'Biased Variance:':<30} {biased_var: 12.4f}")
+            output_lines.append(f"{'Biased Std Dev:':<30} {biased_std: 12.4f}")
+            output_lines.append(f"{'Biased Asymmetry:':<30} {biased_asym: 12.4f}")
 
-            output_lines.append(f"{'Biased Excess:':<30} {biased_kurt: 12.6f}")
+            output_lines.append(f"{'Biased Excess:':<30} {biased_kurt: 12.4f}")
             # Display the table
             self.statistics_output.append("\n".join(table_lines))
             self.statistics_output.append("\n".join(output_lines))
